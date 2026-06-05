@@ -358,11 +358,11 @@
             <span>TF-IDF + LightGBM 基线，CV RMSE=1.176，提交文件已生成 — 已完成</span>
           </div>
         </div>
-        <div class="roadmap-item active">
-          <div class="roadmap-status">▶</div>
+        <div class="roadmap-item completed">
+          <div class="roadmap-status">✓</div>
           <div class="roadmap-text">
             <strong>T17: Stage 2 多模态训练</strong>
-            <span>LightGBM + 全部特征 (900+维) 训练中（当前阶段）</span>
+            <span>LightGBM + 900+维特征, CV RMSE=0.550 — 已完成</span>
           </div>
         </div>
       </div>
@@ -387,8 +387,8 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">Stage 2 CV RMSE</div>
-          <div class="metric-value">--</div>
-          <div class="metric-status">⏳ 训练中</div>
+          <div class="metric-value">0.550</div>
+          <div class="metric-status">✅</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">推理耗时</div>
@@ -440,12 +440,12 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 2+3 特征工程完成, Stage 2 训练中</strong>
-          <span>T8-T14 全部完成。Stage 1 RMSE=0.550 (vs Stage 0 的 1.176, 提升53%)。X_train 900+维特征矩阵已拼接, Stage 2 (LGB+全部特征) 正在训练。</span>
+          <strong>Wave 2+3 全部完成 — Stage 2 RMSE=0.550</strong>
+          <span>T8-T17 全部完成。Stage 0→1→2 RMSE: 1.176 → 0.550 → 0.550。统计特征贡献最大 (-53%), BERT/LightGCN 嵌入增量较小。3个提交文件已生成。</span>
         </div>
         <div class="highlight-item">
-          <strong>6类特征已生成</strong>
-          <span>用户/商品/类别统计 (T8) + 时间/价格/长度 (T9) + K-Fold TE (T10) + DeBERTa 768d (T13) + LightGCN 64d (T14) + TF-IDF 5000d</span>
+          <strong>900+ 维特征矩阵已构建</strong>
+          <span>TF-IDF 5000d + 用户/商品/类别统计 + 时间/价格/长度 + K-Fold TE + DeBERTa 768d + LightGCN 64d = 900+ 维融合特征</span>
         </div>
         <div class="highlight-item">
           <strong>对抗验证通过</strong>

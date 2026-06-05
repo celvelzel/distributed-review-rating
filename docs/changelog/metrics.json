@@ -25,12 +25,22 @@
       ]
     },
     "2": {
-      "rmse": null,
-      "train_time_sec": null,
-      "inference_time_sec": null,
+      "rmse": 0.5503,
+      "train_time_sec": 2395.91,
+      "inference_time_sec": 0.79,
       "model": "lgb_multimodal",
       "features": [
-        "all"
+        "all",
+        "tfidf",
+        "user_stats",
+        "prod_stats",
+        "temporal",
+        "text_length",
+        "te_user",
+        "te_prod",
+        "bert_embeddings",
+        "price_features",
+        "category_stats"
       ]
     },
     "3": {

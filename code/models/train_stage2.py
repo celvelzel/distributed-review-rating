@@ -2,17 +2,23 @@
 """Stage 2: ALL features (TF-IDF + stats + embeddings) + LightGBM → Kaggle submission.
 
 Loads pre-assembled feature matrices:
-- X_train.parquet  (3,007,439 × ~900+ features)
-- X_test.parquet   (10,000     × ~900+ features)
+- X_train.parquet  (3,007,439 × 5927 features, 14 GB compressed)
+- X_test.parquet   (10,000     × 5927 features)
 - y_train.npy      (3,007,439,) target ratings
+
+Memory budget: 64 GB process limit.  Strategy:
+  • Read parquet row-group by row-group directly (no memmap)
+  • CV on 1M-row subsample (~24 GB float32)
+  • Final model via incremental batch training (7 row groups, init_model)
 """
 
 from __future__ import annotations
 
+import gc
 import sys
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import lightgbm as lgb
 import numpy as np
@@ -46,114 +52,213 @@ LGB_PARAMS = {
 }
 
 RANDOM_SEED = 42
+N_ROUNDS = LGB_PARAMS["n_estimators"]
 
 
-# ── data loading (memory-efficient via PyArrow) ────────────────────────
-def load_features():
-    """Load pre-assembled feature matrices via PyArrow, then convert to pandas.
+# ── helpers ────────────────────────────────────────────────────────────
+def _read_row_group_to_numpy(path: Path, rg: int) -> Tuple[np.ndarray, List[str]]:
+    """Read a single row group from parquet → float32 numpy array."""
+    pf = pq.ParquetFile(str(path))
+    table = pf.read_row_group(rg)
+    df = table.to_pandas()
+    col_names = list(df.columns)
+    arr = df.values.astype(np.float32)
+    del df, table
+    return arr, col_names
 
-    Returns
-    -------
-    X_train  : pd.DataFrame  (3M × ~900+)
-    X_test   : pd.DataFrame  (10K × ~900+)
-    y_train  : np.ndarray    (3M,)
-    test_ids : np.ndarray    (10K,) — review ids inferred from row order
-    """
-    print("  Loading X_train via PyArrow …")
-    table_train = pq.read_table(str(X_TRAIN_PATH))
-    X_train = table_train.to_pandas()
-    del table_train
-    print(f"  X_train shape: {X_train.shape}  mem={X_train.memory_usage(deep=True).sum() / 1e9:.2f} GB")
 
-    print("  Loading X_test via PyArrow …")
-    table_test = pq.read_table(str(X_TEST_PATH))
-    X_test = table_test.to_pandas()
-    del table_test
-    print(f"  X_test shape: {X_test.shape}")
+def _read_parquet_schema(path: Path) -> Tuple[List[str], int, int]:
+    """Read schema and row-group count without loading data."""
+    pf = pq.ParquetFile(str(path))
+    col_names = pf.schema_arrow.names
+    n_rows = pf.metadata.num_rows
+    n_groups = pf.metadata.num_row_groups
+    return col_names, n_rows, n_groups
 
-    print("  Loading y_train …")
-    y_train = np.load(str(Y_TRAIN_PATH)).astype(np.float32)
-    print(f"  y_train shape: {y_train.shape}")
 
-    # Try to extract test ids from the test parquet; fall back to 0..9999
-    if "id" in X_test.columns:
-        test_ids = X_test["id"].values
-        X_test = X_test.drop(columns=["id"])
-        if "id" in X_train.columns:
-            X_train = X_train.drop(columns=["id"])
+def _load_test(path: Path, etl_path: Path) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """Load the small test set (10K rows) fully into RAM."""
+    table = pq.read_table(str(path))
+    df = table.to_pandas()
+    col_names = list(df.columns)
+    X_test = df.values.astype(np.float32)
+    del df, table
+
+    if etl_path.exists():
+        test_ids = pd.read_parquet(etl_path, columns=["id"])["id"].values
     else:
-        # Load raw test parquet to get ids
-        raw_test_path = ROOT / "artifacts" / "etl" / "test.parquet"
-        if raw_test_path.exists():
-            raw = pd.read_parquet(raw_test_path, columns=["id"])
-            test_ids = raw["id"].values
-        else:
-            test_ids = np.arange(len(X_test))
+        test_ids = np.arange(len(X_test))
 
-    # Drop any leftover non-feature columns
-    for col in ["rating", "label", "target"]:
-        if col in X_train.columns:
-            X_train = X_train.drop(columns=[col])
-
-    # Fill NaN with 0
-    n_nan_train = X_train.isna().sum().sum()
-    n_nan_test = X_test.isna().sum().sum()
-    if n_nan_train > 0 or n_nan_test > 0:
-        print(f"  Filling NaN: train={n_nan_train:,}  test={n_nan_test:,}")
-        X_train = X_train.fillna(0)
-        X_test = X_test.fillna(0)
-
-    # Ensure same column order and set
-    common_cols = list(set(X_train.columns) & set(X_test.columns))
-    if len(common_cols) < len(X_train.columns):
-        train_only = set(X_train.columns) - set(X_test.columns)
-        print(f"  Dropping {len(train_only)} train-only columns: {sorted(train_only)[:10]}…")
-    if len(common_cols) < len(X_test.columns):
-        test_only = set(X_test.columns) - set(X_train.columns)
-        print(f"  Dropping {len(test_only)} test-only columns: {sorted(test_only)[:10]}…")
-    common_cols.sort()
-    X_train = X_train[common_cols]
-    X_test = X_test[common_cols]
-
-    print(f"  Final feature count: {len(common_cols)}")
-    return X_train, X_test, y_train, test_ids
+    return X_test, test_ids, col_names
 
 
-# ── cross-validation ──────────────────────────────────────────────────
-def cv_rmse(X_all: pd.DataFrame, y_all: np.ndarray, n_splits: int = 3) -> float:
-    """Return mean RMSE across *n_splits* folds."""
+# ── data assembly ──────────────────────────────────────────────────────
+def load_metadata():
+    """Load metadata, test set, and y_train. Returns everything needed for
+    later row-group-by-row-group processing."""
+    train_cols, n_train, n_train_rg = _read_parquet_schema(X_TRAIN_PATH)
+    test_cols, n_test, _ = _read_parquet_schema(X_TEST_PATH)
+
+    print(f"  X_train: {n_train:,} rows × {len(train_cols)} cols ({n_train_rg} row groups)")
+    print(f"  X_test:  {n_test:,} rows × {len(test_cols)} cols")
+
+    # Column alignment
+    common_cols = sorted(set(train_cols) & set(test_cols))
+    if len(common_cols) < len(train_cols) or len(common_cols) < len(test_cols):
+        print(f"  Common features: {len(common_cols)} "
+              f"(dropped {len(train_cols) - len(common_cols)} train-only, "
+              f"{len(test_cols) - len(common_cols)} test-only)")
+    train_col_idx = np.array([train_cols.index(c) for c in common_cols])
+    test_col_idx = np.array([test_cols.index(c) for c in common_cols])
+
+    # Load y_train
+    y_train = np.load(str(Y_TRAIN_PATH)).astype(np.float32)
+    print(f"  y_train: {y_train.shape}")
+
+    # Load test (small)
+    etl_test = ROOT / "artifacts" / "etl" / "test.parquet"
+    X_test_raw, test_ids, _ = _load_test(X_TEST_PATH, etl_test)
+    X_test = X_test_raw[:, test_col_idx].copy()
+    del X_test_raw
+    gc.collect()
+
+    print(f"  X_test aligned: {X_test.shape}")
+    return common_cols, train_col_idx, test_col_idx, X_test, test_ids, y_train, n_train_rg
+
+
+# ── cross-validation (on subsample from row groups) ───────────────────
+def cv_rmse(
+    train_path: Path,
+    train_col_idx: np.ndarray,
+    y_all: np.ndarray,
+    n_train_rg: int,
+    n_splits: int = 3,
+    n_sample_rows: int = 1_000_000,
+) -> float:
+    """3-fold CV on a random subsample loaded from parquet row groups.
+
+    Loads row groups into memory, subsamples, runs CV, frees everything.
+    Peak memory: ~n_sample_rows × D × 4 bytes for the subsample array.
+    """
+    print(f"  Loading row groups for CV subsample ({n_sample_rows:,} rows) …")
+
+    # Load row groups until we have enough rows
+    chunks: List[np.ndarray] = []
+    total_rows = 0
+    pf = pq.ParquetFile(str(train_path))
+    rg = 0
+    while total_rows < n_sample_rows and rg < pf.metadata.num_row_groups:
+        table = pf.read_row_group(rg)
+        df = table.to_pandas()
+        arr = df.values.astype(np.float32)
+        del df, table
+        # Select common columns
+        arr_sel = arr[:, train_col_idx].copy()
+        del arr
+        chunks.append(arr_sel)
+        total_rows += len(arr_sel)
+        rg += 1
+        print(f"    row group {rg}: +{len(arr_sel):,} rows (total: {total_rows:,})")
+        gc.collect()
+
+    # Stack and subsample
+    X_pool = np.vstack(chunks)
+    del chunks
+    gc.collect()
+
+    if len(X_pool) > n_sample_rows:
+        rng = np.random.RandomState(RANDOM_SEED)
+        idx = np.sort(rng.choice(len(X_pool), size=n_sample_rows, replace=False))
+        X_sub = X_pool[idx]
+        y_sub = y_all[idx]  # y_all is ordered same as parquet rows
+        del X_pool
+    else:
+        X_sub = X_pool
+        y_sub = y_all[:len(X_pool)]
+        del X_pool
+    gc.collect()
+    print(f"  CV subsample: {X_sub.shape}")
+
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     rmses: List[float] = []
 
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X_all), 1):
-        X_tr = X_all.iloc[train_idx]
-        X_val = X_all.iloc[val_idx]
-        y_tr, y_val = y_all[train_idx], y_all[val_idx]
-
-        model = lgb.LGBMRegressor(**LGB_PARAMS)
-        model.fit(X_tr, y_tr)
-        preds = np.clip(model.predict(X_val), 1.0, 5.0)
-        rmse = float(np.sqrt(np.mean((preds - y_val) ** 2)))
+    for fold, (tr_idx, va_idx) in enumerate(kf.split(X_sub), 1):
+        ds_tr = lgb.Dataset(X_sub[tr_idx], y_sub[tr_idx], free_raw_data=True)
+        ds_va = lgb.Dataset(X_sub[va_idx], y_sub[va_idx], free_raw_data=True)
+        # Use fewer rounds for CV to keep wall-time manageable
+        cv_rounds = min(N_ROUNDS, 200)
+        model = lgb.train(
+            LGB_PARAMS, ds_tr,
+            num_boost_round=cv_rounds,
+            valid_sets=[ds_va],
+        )
+        preds = np.clip(model.predict(X_sub[va_idx]), 1.0, 5.0)
+        rmse = float(np.sqrt(np.mean((preds - y_sub[va_idx]) ** 2)))
         rmses.append(rmse)
         print(f"  fold {fold}: RMSE = {rmse:.5f}")
+        del ds_tr, ds_va, model, preds
+        gc.collect()
+
+    del X_sub, y_sub
+    gc.collect()
 
     mean_rmse = float(np.mean(rmses))
     print(f"  mean CV RMSE = {mean_rmse:.5f}")
     return mean_rmse
 
 
-# ── timed helpers ──────────────────────────────────────────────────────
+# ── incremental batch training ─────────────────────────────────────────
 @timed("stage_2", "train_time_sec")
-def _train_full(X_train: pd.DataFrame, y_train: np.ndarray) -> lgb.LGBMRegressor:
-    model = lgb.LGBMRegressor(**LGB_PARAMS)
-    model.fit(X_train, y_train)
+def _train_full_incremental(
+    train_path: Path,
+    train_col_idx: np.ndarray,
+    y_all: np.ndarray,
+    n_train_rg: int,
+) -> lgb.Booster:
+    """Train on all rows via row-group batches with init_model.
+
+    Each row group is ~430K rows × 5927 × 4 ≈ 10.2 GB → LGB binned ≈ 3.4 GB.
+    Peak per batch ≈ 14 GB.  Well within 64 GB.
+    """
+    rounds_per_rg = max(1, N_ROUNDS // n_train_rg)
+    extra = N_ROUNDS - rounds_per_rg * n_train_rg
+
+    pf = pq.ParquetFile(str(train_path))
+    row_offset = 0
+    model = None
+
+    for rg in range(n_train_rg):
+        n_rounds = rounds_per_rg + (extra if rg == n_train_rg - 1 else 0)
+
+        print(f"  Row group {rg + 1}/{n_train_rg}: loading …")
+        table = pf.read_row_group(rg)
+        df = table.to_pandas()
+        arr = df.values.astype(np.float32)
+        del df, table
+        X_batch = arr[:, train_col_idx].copy()
+        del arr
+        n_chunk = len(X_batch)
+        y_batch = y_all[row_offset:row_offset + n_chunk]
+        row_offset += n_chunk
+
+        print(f"    {n_chunk:,} rows → training {n_rounds} rounds …")
+        ds = lgb.Dataset(X_batch, y_batch, free_raw_data=True)
+        model = lgb.train(
+            LGB_PARAMS, ds,
+            num_boost_round=n_rounds,
+            init_model=model,
+        )
+        del X_batch, y_batch, ds
+        gc.collect()
+        print(f"    done — total trees: {model.num_trees()}")
+
     return model
 
 
 @timed("stage_2", "inference_time_sec")
 def _predict_and_save(
-    model: lgb.LGBMRegressor,
-    X_test: pd.DataFrame,
+    model: lgb.Booster,
+    X_test: np.ndarray,
     test_ids: np.ndarray,
     output_path: str,
 ) -> pd.DataFrame:
@@ -170,21 +275,27 @@ def main() -> None:
     print("Stage 2: ALL features (multimodal) + LightGBM")
     print("=" * 60)
 
-    # 1. Load features ──────────────────────────────────────────────────
-    print("\n[1/5] Loading pre-assembled feature matrices …")
+    # 1. Load metadata & test ───────────────────────────────────────────
+    print("\n[1/5] Loading metadata & test set …")
     t0 = time.perf_counter()
-    X_train, X_test, y_train, test_ids = load_features()
+    col_names, train_col_idx, test_col_idx, X_test, test_ids, y_train, n_train_rg = \
+        load_metadata()
     load_time = time.perf_counter() - t0
-    print(f"  Loaded in {load_time:.1f}s  |  train: {len(X_train):,}  test: {len(X_test):,}")
+    print(f"  Prepared in {load_time:.1f}s")
 
     # 2. Cross-validation ───────────────────────────────────────────────
-    print("\n[2/5] 3-fold cross-validation …")
-    mean_rmse = cv_rmse(X_train, y_train, n_splits=3)
+    print("\n[2/5] 3-fold cross-validation (1M-row subsample) …")
+    mean_rmse = cv_rmse(
+        X_TRAIN_PATH, train_col_idx, y_train, n_train_rg,
+        n_splits=3, n_sample_rows=500_000,
+    )
 
-    # 3. Train full model ───────────────────────────────────────────────
-    print("\n[3/5] Training full model on all training data …")
+    # 3. Train full model (incremental row-group batches) ───────────────
+    print("\n[3/5] Training full model (incremental, per row group) …")
     timer = StageTimer()
-    model = _train_full(X_train, y_train, stage_timer=timer)
+    model = _train_full_incremental(
+        X_TRAIN_PATH, train_col_idx, y_train, n_train_rg, stage_timer=timer,
+    )
 
     # 4. Predict + save submission ──────────────────────────────────────
     print("\n[4/5] Predicting on test set …")
@@ -224,20 +335,19 @@ def main() -> None:
 
     # ── feature importance ─────────────────────────────────────────────
     print("\n  Top-20 Feature Importance (gain):")
-    importance = model.feature_importances_
-    feat_names = list(X_train.columns)
+    importance = model.feature_importance(importance_type="gain")
     imp_df = (
-        pd.DataFrame({"feature": feat_names, "importance": importance})
+        pd.DataFrame({"feature": col_names, "importance": importance})
         .sort_values("importance", ascending=False)
         .head(20)
     )
-    for i, row in imp_df.iterrows():
+    for _, row in imp_df.iterrows():
         print(f"    {row['feature']:40s} {row['importance']:>12,.0f}")
 
     # Save importance for the report
     imp_path = ROOT / "artifacts" / "features" / "stage2_feature_importance.csv"
     imp_df_full = (
-        pd.DataFrame({"feature": feat_names, "importance": importance})
+        pd.DataFrame({"feature": col_names, "importance": importance})
         .sort_values("importance", ascending=False)
     )
     imp_df_full.to_csv(imp_path, index=False)

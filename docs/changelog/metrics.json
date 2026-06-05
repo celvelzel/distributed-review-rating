@@ -1,0 +1,88 @@
+{
+  "project": "COMP5434 Review Rating Prediction",
+  "stages": {
+    "0": {
+      "rmse": null,
+      "train_time_sec": null,
+      "inference_time_sec": null,
+      "model": "tfidf_lgb",
+      "features": [
+        "tfidf"
+      ]
+    },
+    "1": {
+      "rmse": null,
+      "train_time_sec": null,
+      "inference_time_sec": null,
+      "model": "lgb_stats",
+      "features": [
+        "tfidf",
+        "user_stats",
+        "prod_stats",
+        "temporal"
+      ]
+    },
+    "2": {
+      "rmse": null,
+      "train_time_sec": null,
+      "inference_time_sec": null,
+      "model": "lgb_multimodal",
+      "features": [
+        "all"
+      ]
+    },
+    "3": {
+      "rmse": null,
+      "train_time_sec": null,
+      "inference_time_sec": null,
+      "model": "lgb_multimodal",
+      "features": [
+        "all"
+      ]
+    },
+    "4": {
+      "rmse": null,
+      "train_time_sec": null,
+      "inference_time_sec": null,
+      "model": "stacking",
+      "features": [
+        "all"
+      ]
+    },
+    "5": {
+      "rmse": null,
+      "train_time_sec": null,
+      "inference_time_sec": null,
+      "model": "stacking_tuned",
+      "features": [
+        "all"
+      ]
+    }
+  },
+  "ablations": {
+    "a_no_text": {
+      "rmse": null,
+      "delta_vs_full": null
+    },
+    "b_no_graph": {
+      "rmse": null,
+      "delta_vs_full": null
+    },
+    "c_no_stacking": {
+      "rmse": null,
+      "delta_vs_full": null
+    },
+    "d_no_kfold_te": {
+      "rmse": null,
+      "delta_vs_full": null
+    },
+    "e_tfidf_vs_bert": {
+      "rmse": null,
+      "delta_vs_full": null
+    },
+    "f_no_clip": {
+      "rmse": null,
+      "delta_vs_full": null
+    }
+  }
+}

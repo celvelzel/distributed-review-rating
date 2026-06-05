@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Data files
+data/*.parquet
+data/*.csv
+data/*.json
+
+# ML artifacts
+artifacts/
+mlruns/
+*.model
+*.bin
+*.pt
+*.pth
+
+# Coverage and testing
+htmlcov/
+.coverage
+coverage.xml
+
+# Environment
+.env
+venv/
+.venv/
+*.log
+
+# Sisyphus internals
+.sisyphus/evidence/
+.sisyphus/boulder.json
+
+# IDE
+.vscode/
+.idea/

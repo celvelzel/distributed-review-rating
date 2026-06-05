@@ -38,7 +38,7 @@ def timed(stage_name: str, metric_key: str) -> Callable[[Callable[..., Any]], Ca
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            stage_timer = kwargs.get("stage_timer") or kwargs.get("timer")
+            stage_timer = kwargs.pop("stage_timer", None) or kwargs.pop("timer", None)
             start = time.perf_counter()
             try:
                 return func(*args, **kwargs)

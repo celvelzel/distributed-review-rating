@@ -2,9 +2,9 @@
   "project": "COMP5434 Review Rating Prediction",
   "stages": {
     "0": {
-      "rmse": null,
-      "train_time_sec": null,
-      "inference_time_sec": null,
+      "rmse": 1.17626,
+      "train_time_sec": 392.96,
+      "inference_time_sec": 0.2,
       "model": "tfidf_lgb",
       "features": [
         "tfidf"

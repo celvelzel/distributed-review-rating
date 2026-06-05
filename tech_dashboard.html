@@ -351,11 +351,11 @@
             <span>8个ETL函数、Broadcast Join、Parquet持久化 — 已完成 (11测试通过)</span>
           </div>
         </div>
-        <div class="roadmap-item active">
-          <div class="roadmap-status">▶</div>
+        <div class="roadmap-item completed">
+          <div class="roadmap-status">✓</div>
           <div class="roadmap-text">
             <strong>T7: Stage 0 基线模型</strong>
-            <span>TF-IDF + LightGBM 基线，首次 Kaggle 提交（当前阶段）</span>
+            <span>TF-IDF + LightGBM 基线，CV RMSE=1.176，提交文件已生成 — 已完成</span>
           </div>
         </div>
       </div>
@@ -369,24 +369,24 @@
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">CV RMSE（交叉验证误差）</div>
-          <div class="metric-value">--</div>
-          <div class="metric-status">⏳</div>
+          <div class="metric-label">Stage 0 CV RMSE</div>
+          <div class="metric-value">1.176</div>
+          <div class="metric-status">✅</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Public LB RMSE（公开榜误差）</div>
+          <div class="metric-label">Public LB RMSE</div>
           <div class="metric-value">--</div>
-          <div class="metric-status">⏳</div>
+          <div class="metric-status">⏳ 待提交</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">训练耗时</div>
-          <div class="metric-value">--</div>
-          <div class="metric-status">⏳</div>
+          <div class="metric-value">6.5min</div>
+          <div class="metric-status">✅</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">显存占用</div>
-          <div class="metric-value">--</div>
-          <div class="metric-status">⏳</div>
+          <div class="metric-label">推理耗时</div>
+          <div class="metric-value">0.2s</div>
+          <div class="metric-status">✅</div>
         </div>
       </div>
       <div class="chart-container">
@@ -433,12 +433,12 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 1 基础设施 6/7 完成</strong>
-          <span>T1-T6 全部通过验证。Spark ETL 模块完成：8个函数（load/clean/impute/join/time_features/persist），11个单元测试全通过，3M+行数据已处理为 Parquet。</span>
+          <strong>Wave 1 全部完成 (T1-T7)</strong>
+          <span>Stage 0 基线已建立：TF-IDF + LightGBM，CV RMSE=1.176，训练6.5分钟，推理0.2秒。提交文件 stage0_submission.csv 已生成（10,000行）。</span>
         </div>
         <div class="highlight-item">
-          <strong>数据质量已识别并处理</strong>
-          <span>train.csv 存在多行评论导致的列错位问题（rating列混入文本）。已在 ETL 层通过 cast+filter 方案解决，过滤后有效训练样本 ~295万行。</span>
+          <strong>基础设施完备</strong>
+          <span>Spark ETL (8函数, 11测试)、计时器 (@timed装饰器)、PySpark配置 (3.4.1)、网页骨架 (4区段) 全部通过验证。</span>
         </div>
         <div class="highlight-item">
           <strong>EDA 关键发现</strong>

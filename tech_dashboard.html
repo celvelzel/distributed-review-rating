@@ -358,6 +358,13 @@
             <span>TF-IDF + LightGBM 基线，CV RMSE=1.176，提交文件已生成 — 已完成</span>
           </div>
         </div>
+        <div class="roadmap-item active">
+          <div class="roadmap-status">▶</div>
+          <div class="roadmap-text">
+            <strong>Wave 2+3: 特征工程 + 深度模型</strong>
+            <span>T8-T11 (统计特征/TE/对抗验证) + T13-T14 (DeBERTa/LightGCN) 并行执行中</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -433,12 +440,12 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 1 全部完成 (T1-T7)</strong>
-          <span>Stage 0 基线已建立：TF-IDF + LightGBM，CV RMSE=1.176，训练6.5分钟，推理0.2秒。提交文件 stage0_submission.csv 已生成（10,000行）。</span>
+          <strong>Wave 1 完成, Wave 2+3 并行执行中</strong>
+          <span>T1-T7 全部完成 (Stage 0 RMSE=1.176)。Wave 2 (T8-T11 统计特征) 和 Wave 3 (T13-T14 DeBERTa/LightGCN) 正在并行执行。</span>
         </div>
         <div class="highlight-item">
-          <strong>基础设施完备</strong>
-          <span>Spark ETL (8函数, 11测试)、计时器 (@timed装饰器)、PySpark配置 (3.4.1)、网页骨架 (4区段) 全部通过验证。</span>
+          <strong>6个任务并行执行</strong>
+          <span>T8 (用户/商品/类别统计) + T9 (时间/价格/长度) + T10 (K-Fold TE) + T11 (对抗验证) + T13 (DeBERTa 768d) + T14 (LightGCN 64d)</span>
         </div>
         <div class="highlight-item">
           <strong>EDA 关键发现</strong>

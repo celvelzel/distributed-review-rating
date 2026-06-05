@@ -11,15 +11,17 @@
       ]
     },
     "1": {
-      "rmse": null,
-      "train_time_sec": null,
-      "inference_time_sec": null,
+      "rmse": 0.54975,
+      "train_time_sec": 248.47,
+      "inference_time_sec": 0.11,
       "model": "lgb_stats",
       "features": [
-        "tfidf",
         "user_stats",
         "prod_stats",
-        "temporal"
+        "temporal",
+        "text_length",
+        "te_user",
+        "te_prod"
       ]
     },
     "2": {

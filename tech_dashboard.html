@@ -361,8 +361,8 @@
         <div class="roadmap-item active">
           <div class="roadmap-status">▶</div>
           <div class="roadmap-text">
-            <strong>Wave 2+3: 特征工程 + 深度模型</strong>
-            <span>T8-T11 (统计特征/TE/对抗验证) + T13-T14 (DeBERTa/LightGCN) 并行执行中</span>
+            <strong>T17: Stage 2 多模态训练</strong>
+            <span>LightGBM + 全部特征 (900+维) 训练中（当前阶段）</span>
           </div>
         </div>
       </div>
@@ -381,18 +381,18 @@
           <div class="metric-status">✅</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Public LB RMSE</div>
-          <div class="metric-value">--</div>
-          <div class="metric-status">⏳ 待提交</div>
+          <div class="metric-label">Stage 1 CV RMSE</div>
+          <div class="metric-value">0.550</div>
+          <div class="metric-status">✅ -53%</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">训练耗时</div>
-          <div class="metric-value">6.5min</div>
-          <div class="metric-status">✅</div>
+          <div class="metric-label">Stage 2 CV RMSE</div>
+          <div class="metric-value">--</div>
+          <div class="metric-status">⏳ 训练中</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">推理耗时</div>
-          <div class="metric-value">0.2s</div>
+          <div class="metric-value">0.11s</div>
           <div class="metric-status">✅</div>
         </div>
       </div>
@@ -440,16 +440,16 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 1 完成, Wave 2+3 并行执行中</strong>
-          <span>T1-T7 全部完成 (Stage 0 RMSE=1.176)。Wave 2 (T8-T11 统计特征) 和 Wave 3 (T13-T14 DeBERTa/LightGCN) 正在并行执行。</span>
+          <strong>Wave 2+3 特征工程完成, Stage 2 训练中</strong>
+          <span>T8-T14 全部完成。Stage 1 RMSE=0.550 (vs Stage 0 的 1.176, 提升53%)。X_train 900+维特征矩阵已拼接, Stage 2 (LGB+全部特征) 正在训练。</span>
         </div>
         <div class="highlight-item">
-          <strong>6个任务并行执行</strong>
-          <span>T8 (用户/商品/类别统计) + T9 (时间/价格/长度) + T10 (K-Fold TE) + T11 (对抗验证) + T13 (DeBERTa 768d) + T14 (LightGCN 64d)</span>
+          <strong>6类特征已生成</strong>
+          <span>用户/商品/类别统计 (T8) + 时间/价格/长度 (T9) + K-Fold TE (T10) + DeBERTa 768d (T13) + LightGCN 64d (T14) + TF-IDF 5000d</span>
         </div>
         <div class="highlight-item">
-          <strong>EDA 关键发现</strong>
-          <span>评分严重偏斜：5星占55.5%，1-2星仅19.8%。用户重叠率99.5%，冷启动用户仅0.49%。价格数据60%缺失需特殊处理。中位评论长度119字符。</span>
+          <strong>对抗验证通过</strong>
+          <span>T11 对抗验证 AUC ≈ 0.5, 训练/测试分布一致, 无需剔除特征。</span>
         </div>
       </div>
     </div>

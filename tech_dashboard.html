@@ -344,18 +344,18 @@
             <span>PySpark配置 + 计时器 + 网页骨架 — 已完成</span>
           </div>
         </div>
+        <div class="roadmap-item completed">
+          <div class="roadmap-status">✓</div>
+          <div class="roadmap-text">
+            <strong>T6: Spark ETL 模块</strong>
+            <span>8个ETL函数、Broadcast Join、Parquet持久化 — 已完成 (11测试通过)</span>
+          </div>
+        </div>
         <div class="roadmap-item active">
           <div class="roadmap-status">▶</div>
           <div class="roadmap-text">
-            <strong>T6: Spark ETL 模块</strong>
-            <span>数据加载、清洗、Join、特征提取、Parquet 持久化（当前阶段）</span>
-          </div>
-        </div>
-        <div class="roadmap-item future">
-          <div class="roadmap-status">7</div>
-          <div class="roadmap-text">
-            <strong>T7: Stage 0 基线</strong>
-            <span>TF-IDF + LightGBM 基线模型，首次 Kaggle 提交</span>
+            <strong>T7: Stage 0 基线模型</strong>
+            <span>TF-IDF + LightGBM 基线，首次 Kaggle 提交（当前阶段）</span>
           </div>
         </div>
       </div>
@@ -433,8 +433,8 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 1 基础设施 5/7 完成</strong>
-          <span>T1(脚手架) + T2(EDA) + T3(PySpark配置) + T4(计时器) + T5(网页骨架) 全部通过验证。PySpark 3.4.1 在 HPC 环境正常运行，6张 EDA 图已生成。</span>
+          <strong>Wave 1 基础设施 6/7 完成</strong>
+          <span>T1-T6 全部通过验证。Spark ETL 模块完成：8个函数（load/clean/impute/join/time_features/persist），11个单元测试全通过，3M+行数据已处理为 Parquet。</span>
         </div>
         <div class="highlight-item">
           <strong>数据质量已识别并处理</strong>
@@ -457,10 +457,10 @@
         <div class="risk-item">
           <div class="risk-title">
             <span>🟢</span>
-            <span>基础设施已完成，进入核心开发</span>
+            <span>ETL 管道已完成，数据就绪</span>
           </div>
-          <div class="risk-desc">Wave 1 (T1-T5) 已完成 5/7，T6 (Spark ETL) 正在执行。基础设施稳定，PySpark + 计时器 + 网页骨架均已验证通过。</div>
-          <div class="risk-plan">下一步：完成 T6 ETL → T7 Stage 0 基线 → Wave 2 统计特征</div>
+          <div class="risk-desc">Spark ETL 模块完成：train.parquet (3M行)、test.parquet (10K行)、prodinfo.parquet (213K行)。Broadcast Join 优化已应用，Parquet 格式已持久化。</div>
+          <div class="risk-plan">下一步：完成 T7 Stage 0 基线 → Wave 2 统计特征 → Wave 3 深度模型</div>
         </div>
         <div class="risk-item">
           <div class="risk-title">

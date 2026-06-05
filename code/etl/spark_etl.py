@@ -31,7 +31,9 @@ def load_train(spark: SparkSession, *, path: str = "data/train.csv",
     df = df.withColumn("votes", F.col("votes").cast(DoubleType()))
     df = df.withColumn("time", F.col("time").cast("long"))
     # Filter out rows where rating could not be parsed (text pollution)
-    df = df.filter(F.col("rating").isNotNull())
+    # and ratings outside valid range 1-5.
+    df = df.filter(F.col("rating").isNotNull() & F.col("rating").between(1, 5))
+    df = df.filter(F.col("votes").isNotNull())
     return df
 
 
@@ -124,8 +126,18 @@ def impute_missing(df: DataFrame, *,
 @timed("etl", "join_with_prodinfo_sec")
 def join_with_prodinfo(df: DataFrame, df_prodinfo: DataFrame, *,
                        stage_timer=None) -> DataFrame:
-    """Broadcast-join *df* with product info on ``parent_prod_id``."""
+    """Broadcast-join *df* with product info on ``parent_prod_id``.
+
+    Columns in *df_prodinfo* that collide with *df* (except the join key)
+    are renamed with a ``pi_`` prefix to avoid ambiguity.
+    """
     from pyspark.sql.functions import broadcast
+
+    # Rename conflicting columns in prodinfo (except the join key).
+    overlap = set(df.columns) & set(df_prodinfo.columns) - {"parent_prod_id"}
+    for col_name in overlap:
+        df_prodinfo = df_prodinfo.withColumnRenamed(col_name, f"pi_{col_name}")
+
     return df.join(broadcast(df_prodinfo), on="parent_prod_id", how="left")
 
 

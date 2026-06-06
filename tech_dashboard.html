@@ -358,11 +358,11 @@
             <span>TF-IDF + LightGBM 基线，CV RMSE=1.176，提交文件已生成 — 已完成</span>
           </div>
         </div>
-        <div class="roadmap-item active">
-          <div class="roadmap-status">▶</div>
+        <div class="roadmap-item completed">
+          <div class="roadmap-status">✓</div>
           <div class="roadmap-text">
             <strong>T23: 最终 Pipeline + 提交</strong>
-            <span>生成 submission-final.csv, 最终报告（当前阶段）</span>
+            <span>submission-final.csv 已生成 (10,000行) — 已完成</span>
           </div>
         </div>
       </div>
@@ -440,16 +440,16 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 2+3 全部完成 — Stage 2 RMSE=0.550</strong>
-          <span>T8-T17 全部完成。Stage 0→1→2 RMSE: 1.176 → 0.550 → 0.550。统计特征贡献最大 (-53%), BERT/LightGCN 嵌入增量较小。3个提交文件已生成。</span>
+          <strong>Wave 4 全部完成 — 最终提交已生成</strong>
+          <span>T18-T23 全部完成。CatBoost RMSE=0.548 (最佳单模型)。Stacking (LGB+CatBoost+MLP) 融合完成。submission-final.csv 已生成 (10,000行)。</span>
         </div>
         <div class="highlight-item">
-          <strong>900+ 维特征矩阵已构建</strong>
-          <span>TF-IDF 5000d + 用户/商品/类别统计 + 时间/价格/长度 + K-Fold TE + DeBERTa 768d + LightGCN 64d = 900+ 维融合特征</span>
+          <strong>完整 RMSE 进化链</strong>
+          <span>Stage 0 (1.176) → Stage 1 (0.550, -53%) → CatBoost (0.548) → Stacking (融合)。统计特征贡献最大, 深度嵌入增量较小。</span>
         </div>
         <div class="highlight-item">
-          <strong>对抗验证通过</strong>
-          <span>T11 对抗验证 AUC ≈ 0.5, 训练/测试分布一致, 无需剔除特征。</span>
+          <strong>4个提交文件就绪</strong>
+          <span>submission-stage0.csv, submission-stage1.csv, submission-stage2.csv, submission-final.csv 全部生成, 可提交至 Kaggle。</span>
         </div>
       </div>
     </div>

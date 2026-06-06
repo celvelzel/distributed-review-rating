@@ -53,22 +53,64 @@
       ]
     },
     "4": {
-      "rmse": null,
-      "train_time_sec": null,
-      "inference_time_sec": null,
-      "model": "stacking",
+      "rmse": 0.54528,
+      "train_time_sec": 784.6,
+      "inference_time_sec": 0.5,
+      "model": "stacking_ridge",
       "features": [
         "all"
+      ],
+      "oof_rmse": 0.54528,
+      "lgb_oof_rmse": 0.55239,
+      "catboost_oof_rmse": 0.54797,
+      "mlp_oof_rmse": 1.15201,
+      "ridge_coefficients": {
+        "LGB": 0.318077,
+        "CatBoost": 0.683746,
+        "MLP": 0.043784
+      },
+      "ridge_alpha": 1.0,
+      "n_folds": 5,
+      "total_time_sec": 784.6,
+      "base_models": [
+        "LGB",
+        "CatBoost",
+        "MLP"
       ]
     },
     "5": {
-      "rmse": null,
-      "train_time_sec": null,
-      "inference_time_sec": null,
-      "model": "stacking_tuned",
+      "rmse": 0.54528,
+      "train_time_sec": 0,
+      "inference_time_sec": 0.5,
+      "model": "stacking_final",
       "features": [
         "all"
-      ]
+      ],
+      "submission": "output/submission-final.csv",
+      "submission_lines": 10001,
+      "best_single_rmse": 0.54797,
+      "improvement_vs_best_single": 0.00269,
+      "improvement_vs_baseline": 0.63102
+    },
+    "catboost": {
+      "oof_rmse": 0.54797,
+      "mean_fold_rmse": 0.54797,
+      "fold_rmses": [
+        0.54878,
+        0.54761,
+        0.5478,
+        0.54828,
+        0.54737
+      ],
+      "train_time_sec": 10361.91,
+      "model": "catboost",
+      "features_used": 927,
+      "params": {
+        "iterations": 1000,
+        "learning_rate": 0.05,
+        "depth": 6,
+        "n_folds": 5
+      }
     }
   },
   "ablations": {

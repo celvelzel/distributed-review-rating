@@ -361,8 +361,8 @@
         <div class="roadmap-item active">
           <div class="roadmap-status">▶</div>
           <div class="roadmap-text">
-            <strong>Wave 4: CatBoost + MLP + Stacking</strong>
-            <span>T18 (CatBoost) + T19 (MLP) + T21 (Optuna) 并行执行中</span>
+            <strong>T20+T22: Stacking + Post-processing</strong>
+            <span>Ridge 融合 LGB+CatBoost+MLP, 阈值舍入+Clip 执行中</span>
           </div>
         </div>
       </div>
@@ -376,24 +376,24 @@
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">Stage 0 CV RMSE</div>
+          <div class="metric-label">Stage 0 RMSE</div>
           <div class="metric-value">1.176</div>
-          <div class="metric-status">✅</div>
+          <div class="metric-status">✅ TF-IDF</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Stage 1 CV RMSE</div>
+          <div class="metric-label">Stage 1 RMSE</div>
           <div class="metric-value">0.550</div>
-          <div class="metric-status">✅ -53%</div>
+          <div class="metric-status">✅ Stats</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Stage 2 CV RMSE</div>
-          <div class="metric-value">0.550</div>
-          <div class="metric-status">✅</div>
+          <div class="metric-label">CatBoost RMSE</div>
+          <div class="metric-value">0.548</div>
+          <div class="metric-status">✅ Best</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">推理耗时</div>
-          <div class="metric-value">0.11s</div>
-          <div class="metric-status">✅</div>
+          <div class="metric-label">Stacking RMSE</div>
+          <div class="metric-value">--</div>
+          <div class="metric-status">⏳ 训练中</div>
         </div>
       </div>
       <div class="chart-container">

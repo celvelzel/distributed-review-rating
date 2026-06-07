@@ -111,6 +111,50 @@
         "depth": 6,
         "n_folds": 5
       }
+    },
+    "optimized_v1": {
+      "cv_rmse_subsample": 1.22806,
+      "train_time_sec": 325.4,
+      "inference_time_sec": 0.2,
+      "model": "lgb_optimized",
+      "features": [
+        "tfidf_5000",
+        "temporal",
+        "text_length",
+        "votes",
+        "purchased"
+      ],
+      "n_estimators": 300,
+      "best_params": {
+        "num_leaves": 31,
+        "max_depth": -1,
+        "learning_rate": 0.05,
+        "min_child_samples": 20,
+        "feature_fraction": 0.8,
+        "bagging_fraction": 0.6,
+        "bagging_freq": 1
+      },
+      "leakage_free": true,
+      "note": "Optuna params from prior 20K subsample run; CV on 20K subsample"
+    },
+    "tfidf_regularized": {
+      "kaggle_score": 0.79012,
+      "train_time_sec": 606,
+      "inference_time_sec": 0.5,
+      "model": "lgb_tfidf_regularized",
+      "features": [
+        "tfidf_5000"
+      ],
+      "params": {
+        "n_estimators": 500,
+        "num_leaves": 127,
+        "learning_rate": 0.05,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8
+      },
+      "note": "New best! Regularization improved generalization. No target leakage.",
+      "improvement_vs_baseline": -0.01095,
+      "improvement_pct": "-1.4%"
     }
   },
   "ablations": {

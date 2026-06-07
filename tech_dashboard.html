@@ -376,24 +376,24 @@
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">Stage 0 RMSE</div>
-          <div class="metric-value">1.176</div>
-          <div class="metric-status">✅ TF-IDF</div>
+          <div class="metric-label">Stage 0 Kaggle</div>
+          <div class="metric-value">0.801</div>
+          <div class="metric-status">✅ TF-IDF baseline</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Stage 1 RMSE</div>
-          <div class="metric-value">0.550</div>
-          <div class="metric-status">✅ Stats</div>
+          <div class="metric-label">Best Kaggle</div>
+          <div class="metric-value">0.790</div>
+          <div class="metric-status">🏆 New best!</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">CatBoost RMSE</div>
-          <div class="metric-value">0.548</div>
-          <div class="metric-status">✅ Best</div>
+          <div class="metric-label">Improvement</div>
+          <div class="metric-value">-1.4%</div>
+          <div class="metric-status">✅ vs baseline</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Stacking RMSE</div>
-          <div class="metric-value">--</div>
-          <div class="metric-status">✅ 完成</div>
+          <div class="metric-label">Model</div>
+          <div class="metric-value">LGB</div>
+          <div class="metric-status">127 leaves, reg</div>
         </div>
       </div>
       <div class="chart-container">
@@ -440,16 +440,16 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>Wave 4 全部完成 — 最终提交已生成</strong>
-          <span>T18-T23 全部完成。CatBoost RMSE=0.548 (最佳单模型)。Stacking (LGB+CatBoost+MLP) 融合完成。submission-final.csv 已生成 (10,000行)。</span>
+          <strong>新最佳 Kaggle 分数: 0.79012</strong>
+          <span>通过正则化 LightGBM (127 leaves, subsample=0.8, colsample=0.8) 击败 Stage 0 基线 (0.80107)。改进幅度 1.4%。</span>
         </div>
         <div class="highlight-item">
-          <strong>完整 RMSE 进化链</strong>
-          <span>Stage 0 (1.176) → Stage 1 (0.550, -53%) → CatBoost (0.548) → Stacking (融合)。统计特征贡献最大, 深度嵌入增量较小。</span>
+          <strong>关键发现: 统计特征导致过拟合</strong>
+          <span>Stage 1+ 的统计特征 (user_te, prod_te, avg_rating) 存在目标泄漏, 导致 Kaggle 分数变差 (1.2-1.6)。纯 TF-IDF 特征泛化最好。</span>
         </div>
         <div class="highlight-item">
-          <strong>4个提交文件就绪</strong>
-          <span>submission-stage0.csv, submission-stage1.csv, submission-stage2.csv, submission-final.csv 全部生成, 可提交至 Kaggle。</span>
+          <strong>TF-IDF + 正则化是最佳策略</strong>
+          <span>5000 TF-IDF 特征 + 正则化 LightGBM (127 leaves, subsample=0.8) 是当前最佳配置。无需复杂特征工程。</span>
         </div>
       </div>
     </div>
@@ -498,7 +498,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-05 14:30:00</span></p>
+    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-07 00:00:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

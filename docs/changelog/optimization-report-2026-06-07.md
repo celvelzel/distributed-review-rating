@@ -151,8 +151,47 @@ To close the 21% gap, try:
 | `code/models/comprehensive_optimization.py` | Comprehensive optimization script |
 | `code/models/train_tfidf_quick.py` | Quick optimization script |
 | `code/models/train_tfidf_ultrafast.py` | Ultra-fast optimization script |
+| `code/models/create_ensemble.py` | Ensemble creation script |
+| `code/models/postprocess_best.py` | Post-processing script |
+| `output/submission-ensemble_*.csv` | Ensemble submissions (avg, weighted, median) |
+| `output/submission-clip_*.csv` | Clipped submissions (various ranges) |
+| `output/submission-rounded_*.csv` | Rounded submissions |
+| `output/submission-blend_*.csv` | Blended submissions (various ratios) |
 | `docs/changelog/metrics.json` | Updated with all experiment results |
 | `tech_dashboard.html` | Updated with latest scores and findings |
+
+---
+
+## New Submissions Created (2026-06-07 12:30)
+
+### Ensemble Methods
+- **submission-ensemble_avg.csv** - Average of all existing submissions
+- **submission-ensemble_weighted.csv** - Weighted average (best=50%, baseline=20%, others=30%)
+- **submission-ensemble_median.csv** - Median ensemble
+
+### Post-processing Methods
+- **submission-clip_10_45.csv** - Clipped to [1.0, 4.5]
+- **submission-clip_15_50.csv** - Clipped to [1.5, 5.0]
+- **submission-clip_20_50.csv** - Clipped to [2.0, 5.0]
+- **submission-rounded_05.csv** - Rounded to nearest 0.5
+- **submission-rounded_1.csv** - Rounded to nearest integer
+
+### Blending Methods
+- **submission-blend_90_9.csv** - 90% best + 10% baseline
+- **submission-blend_80_19.csv** - 80% best + 20% baseline
+- **submission-blend_70_30.csv** - 70% best + 30% baseline
+- **submission-blend_60_40.csv** - 60% best + 40% baseline
+
+---
+
+## Kaggle API Issue
+
+The provided Kaggle API token (`KGAT_893a1232ecb6176168e09ae410e0c29d`) is returning 401 Unauthorized. This could be because:
+1. The token is expired
+2. The token format is incorrect (usually Kaggle tokens are 32-character hex strings without prefix)
+3. The competition name is different
+
+**Action Required**: Please regenerate your Kaggle API token from https://www.kaggle.com/settings and update the `~/.kaggle/kaggle.json` file.
 
 ---
 
@@ -164,4 +203,4 @@ The key insight is that **simple TF-IDF features generalize better than complex 
 
 ---
 
-*Report generated: 2026-06-07 04:00:00*
+*Report updated: 2026-06-07 12:30:00*

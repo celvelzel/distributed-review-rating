@@ -1,6 +1,6 @@
 {
   "project": "COMP5434 Review Rating Prediction",
-  "last_updated": "2026-06-07T04:00:00",
+  "last_updated": "2026-06-07T12:30:00",
   "best_kaggle_score": 0.79012,
   "competitor_score": 0.62,
   "stages": {
@@ -97,15 +97,26 @@
     {"file": "submission-260606-stage2.csv", "score": 1.31628, "date": "2026-06-06", "note": "Multimodal (leakage)"},
     {"file": "submission-260606-stage1.csv", "score": 1.59341, "date": "2026-06-06", "note": "Stats features (leakage)"}
   ],
+  "new_submissions_pending": [
+    {"file": "submission-ensemble_avg.csv", "score": null, "date": "2026-06-07", "note": "Average of all submissions"},
+    {"file": "submission-ensemble_weighted.csv", "score": null, "date": "2026-06-07", "note": "Weighted average (best=50%, baseline=20%)"},
+    {"file": "submission-ensemble_median.csv", "score": null, "date": "2026-06-07", "note": "Median ensemble"},
+    {"file": "submission-clip_10_45.csv", "score": null, "date": "2026-06-07", "note": "Clipped to [1.0, 4.5]"},
+    {"file": "submission-clip_15_50.csv", "score": null, "date": "2026-06-07", "note": "Clipped to [1.5, 5.0]"},
+    {"file": "submission-rounded_05.csv", "score": null, "date": "2026-06-07", "note": "Rounded to nearest 0.5"},
+    {"file": "submission-blend_90_9.csv", "score": null, "date": "2026-06-07", "note": "90% best + 10% baseline"},
+    {"file": "submission-blend_70_30.csv", "score": null, "date": "2026-06-07", "note": "70% best + 30% baseline"}
+  ],
   "experiments_tried": [
-    "TF-IDF features (5K, 10K, 15K, 20K)",
+    "TF-IDF features (5K, 8K, 10K, 15K, 20K)",
     "N-gram ranges: (1,1), (1,2), (1,3)",
-    "LightGBM hyperparameter tuning (leaves, lr, subsample, colsample)",
+    "LightGBM hyperparameter tuning (leaves, lr, subsample, colsample, reg_alpha, reg_lambda)",
     "Adding leakage-free features (temporal, text_length, votes, purchased)",
-    "Ensemble of multiple models (equal weight, weighted)",
-    "Blending best model with Stage 0",
-    "Post-processing (rounding, different clipping)",
-    "K-Fold target encoding"
+    "Ensemble of multiple models (equal weight, weighted, median)",
+    "Blending best model with Stage 0 (various ratios)",
+    "Post-processing (rounding, different clipping, adding noise)",
+    "K-Fold target encoding",
+    "Regularization strategies (subsample=0.7-0.8, colsample=0.7-0.8)"
   ],
   "key_findings": [
     "TF-IDF features are the most important for generalization",
@@ -113,7 +124,9 @@
     "Adding extra features (temporal, text_length) hurts performance",
     "Regularization (subsample=0.8, colsample=0.8) helps generalization",
     "Ensemble/blending doesn't significantly improve over single best model",
-    "Local CV RMSE can be misleading if there's target leakage"
+    "Local CV RMSE can be misleading if there's target leakage",
+    "More TF-IDF features (10K+) may help but training is slow",
+    "Different clipping ranges may improve score"
   ],
   "ablations": {
     "a_no_text": {"rmse": null, "delta_vs_full": null},

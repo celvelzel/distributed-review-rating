@@ -274,6 +274,30 @@
     color: var(--accent);
   }
 
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .score-best {
+    color: var(--green);
+    font-weight: 700;
+  }
+  .score-bad {
+    color: var(--red);
+  }
+
   /* Footer */
   footer {
     margin-top: 30px;
@@ -312,7 +336,7 @@
 <div class="container">
   <header>
     <h1>COMP5434 评论评分预测系统</h1>
-    <p class="subtitle">Big Data Computing 项目技术看板 | 目标：Kaggle RMSE 最优化 + 高效分布式处理</p>
+    <p class="subtitle">Big Data Computing 项目技术看板 | 目标：Kaggle RMSE 最优化</p>
   </header>
 
   <div class="cards">
@@ -355,14 +379,21 @@
           <div class="roadmap-status">✓</div>
           <div class="roadmap-text">
             <strong>T7: Stage 0 基线模型</strong>
-            <span>TF-IDF + LightGBM 基线，CV RMSE=1.176，提交文件已生成 — 已完成</span>
+            <span>TF-IDF + LightGBM 基线，Kaggle=0.801 — 已完成</span>
           </div>
         </div>
-        <div class="roadmap-item completed">
-          <div class="roadmap-status">✓</div>
+        <div class="roadmap-item active">
+          <div class="roadmap-status">⚡</div>
           <div class="roadmap-text">
-            <strong>T23: 最终 Pipeline + 提交</strong>
-            <span>submission-final.csv 已生成 (10,000行) — 已完成</span>
+            <strong>T24: 模型优化迭代</strong>
+            <span>TF-IDF + 正则化 LightGBM，Kaggle=0.790 — 进行中</span>
+          </div>
+        </div>
+        <div class="roadmap-item future">
+          <div class="roadmap-status">○</div>
+          <div class="roadmap-text">
+            <strong>T25: 高级模型探索</strong>
+            <span>神经网络 / 更好的特征工程 — 待开始</span>
           </div>
         </div>
       </div>
@@ -372,63 +403,105 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">📊</span>
-        <span>系统性能仪表盘</span>
+        <span>Kaggle 分数仪表盘</span>
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">Stage 0 Kaggle</div>
+          <div class="metric-label">Stage 0 基线</div>
           <div class="metric-value">0.801</div>
-          <div class="metric-status">✅ TF-IDF baseline</div>
+          <div class="metric-status">TF-IDF 5K</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Best Kaggle</div>
-          <div class="metric-value">0.790</div>
-          <div class="metric-status">🏆 New best!</div>
+          <div class="metric-label">当前最佳</div>
+          <div class="metric-value" style="color: var(--green);">0.790</div>
+          <div class="metric-status">🏆 TF-IDF + 正则化</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Improvement</div>
-          <div class="metric-value">-1.4%</div>
-          <div class="metric-status">✅ vs baseline</div>
+          <div class="metric-label">竞争对手</div>
+          <div class="metric-value" style="color: var(--red);">0.620</div>
+          <div class="metric-status">⚠️ 领先我们</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Model</div>
-          <div class="metric-value">LGB</div>
-          <div class="metric-status">127 leaves, reg</div>
+          <div class="metric-label">差距</div>
+          <div class="metric-value" style="color: var(--yellow);">21%</div>
+          <div class="metric-status">需要改进</div>
         </div>
       </div>
-      <div class="chart-container">
-        <div class="chart-title">RMSE 趋势（随迭代变化）</div>
-        <svg viewBox="0 0 400 160">
-          <!-- Grid lines -->
-          <line x1="50" y1="20" x2="50" y2="140" class="chart-grid"/>
-          <line x1="50" y1="140" x2="380" y2="140" class="chart-grid"/>
-          <line x1="50" y1="80" x2="380" y2="80" class="chart-grid"/>
-          <line x1="50" y1="20" x2="380" y2="20" class="chart-grid"/>
-          <!-- Y-axis labels -->
-          <text x="45" y="25" class="chart-label" text-anchor="end">0.8</text>
-          <text x="45" y="85" class="chart-label" text-anchor="end">1.0</text>
-          <text x="45" y="145" class="chart-label" text-anchor="end">1.2</text>
-          <!-- X-axis labels -->
-          <text x="100" y="155" class="chart-label">Baseline</text>
-          <text x="190" y="155" class="chart-label">迭代1</text>
-          <text x="280" y="155" class="chart-label">迭代2</text>
-          <text x="370" y="155" class="chart-label">目标</text>
-          <!-- Area -->
-          <path d="M100,120 L190,90 L280,70 L370,50 L370,140 L100,140 Z" class="chart-area"/>
-          <!-- Line -->
-          <path d="M100,120 L190,90 L280,70 L370,50" class="chart-line"/>
-          <!-- Dots -->
-          <circle cx="100" cy="120" r="5" class="chart-dot"/>
-          <circle cx="190" cy="90" r="5" class="chart-dot"/>
-          <circle cx="280" cy="70" r="5" class="chart-dot"/>
-          <circle cx="370" cy="50" r="5" class="chart-dot"/>
-        </svg>
-        <div class="legend">
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--accent);"></div>
-            <span>RMSE 趋势（目标值，待实际数据填充）</span>
-          </div>
-        </div>
+
+      <!-- Kaggle Scores Table -->
+      <div style="margin-top: 20px;">
+        <div class="chart-title">所有 Kaggle 提交记录</div>
+        <table>
+          <thead>
+            <tr>
+              <th>提交文件</th>
+              <th>分数</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>submission-tfidf-regularized.csv</td>
+              <td class="score-best">0.79012</td>
+              <td>🏆 最佳</td>
+            </tr>
+            <tr>
+              <td>submission-blend_80_20.csv</td>
+              <td>0.79142</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>submission-clip_1_5_round.csv</td>
+              <td>0.79281</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>stage0_submission.csv</td>
+              <td>0.80107</td>
+              <td>基线</td>
+            </tr>
+            <tr>
+              <td>submission-stage0-repro.csv</td>
+              <td>0.80109</td>
+              <td>复现</td>
+            </tr>
+            <tr>
+              <td>submission-ensemble-weighted.csv</td>
+              <td>0.80276</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>submission-ensemble.csv</td>
+              <td>0.80706</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>submission-optimized-v1.csv</td>
+              <td class="score-bad">0.84339</td>
+              <td>过拟合</td>
+            </tr>
+            <tr>
+              <td>submission-tfidf-v2.csv</td>
+              <td class="score-bad">0.86572</td>
+              <td>子采样</td>
+            </tr>
+            <tr>
+              <td>submission-lgb-kfold-final.csv</td>
+              <td class="score-bad">1.18779</td>
+              <td>泄漏</td>
+            </tr>
+            <tr>
+              <td>submission-260606-stage2.csv</td>
+              <td class="score-bad">1.31628</td>
+              <td>泄漏</td>
+            </tr>
+            <tr>
+              <td>submission-260606-stage1.csv</td>
+              <td class="score-bad">1.59341</td>
+              <td>泄漏</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -436,7 +509,7 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">✨</span>
-        <span>核心亮点</span>
+        <span>核心发现</span>
       </div>
       <div class="highlights">
         <div class="highlight-item">
@@ -448,8 +521,12 @@
           <span>Stage 1+ 的统计特征 (user_te, prod_te, avg_rating) 存在目标泄漏, 导致 Kaggle 分数变差 (1.2-1.6)。纯 TF-IDF 特征泛化最好。</span>
         </div>
         <div class="highlight-item">
+          <strong>TF-IDF 是最佳特征</strong>
+          <span>5000 TF-IDF 特征 + 正则化 LightGBM 是当前最佳配置。添加额外特征 (temporal, text_length) 反而降低性能。</span>
+        </div>
+        <div class="highlight-item">
           <strong>竞争状态: 落后于竞争对手</strong>
-          <span>当前最佳 0.79012, 竞争对手已达到 0.62。差距 0.17 (21%)。需要尝试更高级的方法 (神经网络, 更好的特征工程)。</span>
+          <span>当前最佳 0.79012, 竞争对手已达到 0.62。差距 21%。需要尝试更高级的方法。</span>
         </div>
       </div>
     </div>
@@ -458,47 +535,92 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">⚠️</span>
-        <span>风险与缺点</span>
+        <span>风险与挑战</span>
       </div>
       <div class="risks">
+        <div class="risk-item critical">
+          <div class="risk-title">
+            <span>🔴</span>
+            <span>竞争对手领先 21%</span>
+          </div>
+          <div class="risk-desc">竞争对手已达到 0.62, 我们还在 0.79。差距巨大, 需要根本性的方法改进。</div>
+          <div class="risk-plan">可能需要: 神经网络, 更好的特征工程, 或完全不同的方法</div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-title">
+            <span>🟡</span>
+            <span>训练速度限制迭代</span>
+          </div>
+          <div class="risk-desc">TF-IDF 提取 (~93s) + LightGBM 训练 (~600s) 限制了参数搜索速度。每次实验需要 ~12 分钟。</div>
+          <div class="risk-plan">使用子采样进行快速迭代, 最终模型在全数据上训练</div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-title">
+            <span>🟡</span>
+            <span>目标泄漏问题</span>
+          </div>
+          <div class="risk-desc">统计特征 (user_te, prod_te) 存在目标泄漏, 导致本地 CV 分数好但 Kaggle 分数差。</div>
+          <div class="risk-plan">只使用 TF-IDF 等无泄漏特征, 或使用 K-Fold 目标编码</div>
+        </div>
         <div class="risk-item">
           <div class="risk-title">
             <span>🟢</span>
-            <span>ETL 管道已完成，数据就绪</span>
+            <span>数据质量已解决</span>
           </div>
-          <div class="risk-desc">Spark ETL 模块完成：train.parquet (3M行)、test.parquet (10K行)、prodinfo.parquet (213K行)。Broadcast Join 优化已应用，Parquet 格式已持久化。</div>
-          <div class="risk-plan">下一步：完成 T7 Stage 0 基线 → Wave 2 统计特征 → Wave 3 深度模型</div>
-        </div>
-        <div class="risk-item">
-          <div class="risk-title">
-            <span>🟡</span>
-            <span>数据质量问题已解决</span>
-          </div>
-          <div class="risk-desc">train.csv 存在多行评论导致的列错位（rating列混入文本），已通过 cast+filter 处理。过滤后 ~295万有效行。</div>
+          <div class="risk-desc">train.csv 存在多行评论导致的列错位, 已通过 cast+filter 处理。过滤后 ~300万有效行。</div>
           <div class="risk-plan">ETL 模块中已内置数据类型校验和过滤逻辑</div>
         </div>
-        <div class="risk-item">
-          <div class="risk-title">
-            <span>🟡</span>
-            <span>评分严重偏斜需关注</span>
-          </div>
-          <div class="risk-desc">5星评分占55.5%，可能导致模型偏向高分预测。1-2星仅19.8%。</div>
-          <div class="risk-plan">后续考虑分层采样或类别权重调整</div>
-        </div>
-        <div class="risk-item">
-          <div class="risk-title">
-            <span>🟡</span>
-            <span>价格数据60%缺失</span>
-          </div>
-          <div class="risk-desc">prodInfo 中 60.24% 的价格字段为空，需按类别中位数填充或作为缺失特征处理。</div>
-          <div class="risk-plan">ETL 中已实现按 main_category 中位数填充策略</div>
-        </div>
+      </div>
+    </div>
+
+    <!-- 5. Experiments Summary -->
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">🧪</span>
+        <span>实验总结</span>
+      </div>
+      <div style="font-size: 14px; color: var(--text-muted);">
+        <p><strong>已尝试的方法:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 8px;">
+          <li>TF-IDF 特征 (5K, 10K, 15K, 20K)</li>
+          <li>N-gram 范围: (1,1), (1,2), (1,3)</li>
+          <li>LightGBM 超参数调优 (leaves, lr, subsample)</li>
+          <li>添加泄漏-free 特征 (temporal, text_length, votes)</li>
+          <li>集成多个模型 (equal weight, weighted)</li>
+          <li>混合最佳模型与 Stage 0</li>
+          <li>后处理 (四舍五入, 不同 clipping)</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>关键结论:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 8px;">
+          <li>TF-IDF 特征是最重要的</li>
+          <li>添加额外特征反而降低性能</li>
+          <li>正则化 (subsample, colsample) 有助于泛化</li>
+          <li>集成/混合没有显著改善</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 6. Next Steps -->
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">🎯</span>
+        <span>下一步计划</span>
+      </div>
+      <div style="font-size: 14px; color: var(--text-muted);">
+        <p><strong>为了缩小与竞争对手的差距, 需要尝试:</strong></p>
+        <ol style="margin-left: 20px; margin-top: 8px;">
+          <li><strong>神经网络</strong>: 使用预计算的 BERT 嵌入 (768维) 训练 MLP</li>
+          <li><strong>安装 XGBoost</strong>: 尝试不同的梯度提升算法</li>
+          <li><strong>字符级 N-gram</strong>: 尝试字符级特征</li>
+          <li><strong>更好的文本预处理</strong>: 不同的分词、清洗方法</li>
+          <li><strong>Transformer 微调</strong>: 直接微调预训练语言模型</li>
+        </ol>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-07 00:00:00</span></p>
+    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-07 04:00:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

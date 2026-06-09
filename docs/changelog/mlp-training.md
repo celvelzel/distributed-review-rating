@@ -1,67 +1,48 @@
-# T19: MLP Base Model Training
+# MLP v2: BERT-Only Training
 
 ## Architecture
-- **Model**: 3-layer MLP (RatingMLP)
-- **Input**: DeBERTa (768d) + LightGCN user_emb (64d) + LightGCN item_emb (64d) = **896d**
-- **Layers**: Linear(896→512) → ReLU → Dropout(0.3) → Linear(512→128) → ReLU → Dropout(0.3) → Linear(128→1)
+- **Model**: 4-layer MLP with BatchNorm
+- **Input**: DeBERTa (768d) only — LightGCN removed (near-zero embeddings)
+- **Layers**: Linear(768→512) → BN → ReLU → Dropout(0.4)
+             → Linear(512→256) → BN → ReLU → Dropout(0.4)
+             → Linear(256→128) → BN → ReLU → Dropout(0.3)
+             → Linear(128→1)
 - **Loss**: MSE
 - **Optimizer**: Adam (lr=1e-3, weight_decay=1e-5)
+- **Scheduler**: CosineAnnealingLR
 
 ## Hyperparameters
-- Folds: 5 (stratified-shuffle split, seed=42)
-- Epochs per fold: 30 (early stopping patience=5)
-- Batch size: 32768
-- Device: NVIDIA GeForce RTX 3080 Ti (CUDA)
+- Folds: 5
+- Epochs per fold: 50 (early stopping patience=10)
+- Batch size: 4096
+- Random seed: 42
+- Device: cuda
 
-## Per-Fold Results
-
-| Fold | Epochs | Best Val RMSE | Early Stop? |
-|------|--------|---------------|-------------|
-| 1    | 30     | 1.14625       | No          |
-| 2    | 30     | 1.14830       | No          |
-| 3    | 18     | 1.15448       | Yes (epoch 18) |
-| 4    | 30     | 1.14838       | No          |
-| 5    | 17     | 1.16261       | Yes (epoch 17) |
-
-### Training Loss Curves (selected epochs)
-
-**Fold 1:**
-| Epoch | Train Loss | Val Loss  | Val RMSE  |
-|-------|------------|-----------|-----------|
-| 1     | 2.73498    | 1.57397   | 1.25458   |
-| 5     | 1.53608    | 1.36702   | 1.16920   |
-| 10    | 1.50606    | 1.35537   | 1.16420   |
-| 15    | 1.48483    | 1.33812   | 1.15677   |
-| 20    | 1.46850    | 1.32648   | 1.15173   |
-| 25    | 1.45391    | 1.31921   | 1.14857   |
-| 30    | 1.43528    | 1.31390   | 1.14625   |
-
-**Fold 3 (early stopped):**
-| Epoch | Train Loss | Val Loss  | Val RMSE  |
-|-------|------------|-----------|-----------|
-| 1     | 2.69748    | 1.59142   | 1.26152   |
-| 5     | 1.53321    | 1.37833   | 1.17402   |
-| 10    | 1.49097    | 1.35304   | 1.16320   |
-| 15    | 1.46041    | 1.36883   | 1.16997   |
-| 18    | —          | —         | early stop|
-
-## Summary
-- **OOF RMSE: 1.15201**
-- CV training time: 3,957s (~66 min)
-- Total time: 4,132s (~69 min)
+## Results
+- **OOF RMSE: 1.13119**
+- **OOF pred std: 0.85802**
+- CV time: 5947.6s
+- Total time: 5996.4s
 
 ## Data
 - Training samples: 3,007,439
 - Test samples: 10,000
-- Features: 896 (768 DeBERTa + 64 user + 64 item)
-- User/item embedding coverage: ~100% (zero-padded for unknowns)
+- Features: 768 (BERT-only, LightGCN removed)
 
 ## Outputs
-- OOF predictions: `artifacts/models/mlp_oof.npy` shape=(3,007,439,) range=[1.0, 5.0] mean=3.916
-- Test predictions: `artifacts/models/mlp_test.npy` shape=(10,000,) range=[1.21, 4.96] mean=3.966
+- OOF predictions: `artifacts/models/mlp_oof.npy` (3,007,439,)
+- Test predictions: `artifacts/models/mlp_test.npy` (10,000,)
+
+## Changes from v1
+- Removed LightGCN embeddings (near-zero, added noise)
+- Reduced input dim: 896 → 768
+- Added BatchNorm layers for training stability
+- Increased dropout: 0.3 → 0.4
+- Added cosine annealing LR scheduler
+- Increased patience: 5 → 10
+- Reduced batch size: 32768 → 2048
+- Increased max epochs: 30 → 50
 
 ## Notes
-- Users/items not found in LightGCN embeddings are zero-padded
 - Predictions clipped to [1.0, 5.0]
-- GPU: NVIDIA GeForce RTX 3080 Ti
-- The MLP RMSE (1.152) is higher than the LightGBM stage-2 model (~0.55) as expected — the MLP uses only embeddings, not the full 5927-feature set. This model is intended as a base model for stacking, providing decorrelated predictions.
+- CPU fallback used if CUDA not available

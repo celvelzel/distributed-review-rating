@@ -18,8 +18,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
+
+from code.features.text_chartfidf import load as load_chartfidf
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,6 +56,10 @@ def build_dense(
     product_stats: pd.DataFrame,
     cat_stats: pd.DataFrame,
     price_feats: pd.DataFrame,
+    product_meta: pd.DataFrame,
+    prod_title_emb: np.ndarray,
+    prod_feat_emb: np.ndarray,
+    prod_emb2idx: dict,
     user_emb: np.ndarray,
     item_emb: np.ndarray,
     user2idx: dict,
@@ -120,6 +127,28 @@ def build_dense(
     prf = pr.reindex(parent_ids).reset_index(drop=True).astype(np.float32)
     parts.append(prf)
     log.info(f"    price_feats: {prf.shape}")
+
+    # Product metadata features (feature_count, store stats, etc.)
+    pm = product_meta.set_index("parent_prod_id")
+    pmf = pm.reindex(parent_ids).reset_index(drop=True).astype(np.float32)
+    parts.append(pmf)
+    log.info(f"    product_meta: {pmf.shape}")
+
+    # Product title embeddings
+    pidx = pd.Series(parent_ids).map(prod_emb2idx).fillna(-1).astype(int).values
+    pte = np.zeros((n, prod_title_emb.shape[1]), dtype=np.float32)
+    mask = pidx >= 0
+    pte[mask] = prod_title_emb[pidx[mask]].astype(np.float32)
+    ptdf = pd.DataFrame(pte, columns=[f"prod_title_emb_{i}" for i in range(prod_title_emb.shape[1])])
+    parts.append(ptdf)
+    log.info(f"    prod_title_emb: {ptdf.shape}")
+
+    # Product feature embeddings
+    pfe = np.zeros((n, prod_feat_emb.shape[1]), dtype=np.float32)
+    pfe[mask] = prod_feat_emb[pidx[mask]].astype(np.float32)
+    pfdf = pd.DataFrame(pfe, columns=[f"prod_feat_emb_{i}" for i in range(prod_feat_emb.shape[1])])
+    parts.append(pfdf)
+    log.info(f"    prod_feat_emb: {pfdf.shape}")
 
     # Category features (K-Fold) - drop duplicates
     cat_stats = cat_stats.drop_duplicates(subset=["main_category"], keep="first")
@@ -234,6 +263,14 @@ def assemble_features():
         item2idx = json.load(f)
     item_emb = np.load(f"{FEAT_DIR}/item_emb.npy", mmap_mode="r")
 
+    # Product metadata features (T18)
+    product_meta = _rp(f"{FEAT_DIR}/product_metadata.parquet")
+    prod_title_emb = np.load(f"{FEAT_DIR}/product_title_emb.npy", mmap_mode="r")
+    prod_feat_emb = np.load(f"{FEAT_DIR}/product_feat_emb.npy", mmap_mode="r")
+    prod_emb_ids = _rp(f"{FEAT_DIR}/product_emb_ids.parquet")
+    prod_emb2idx = dict(zip(prod_emb_ids["parent_prod_id"].values, range(len(prod_emb_ids))))
+    log.info(f"  product_meta: {product_meta.shape}, title_emb: {prod_title_emb.shape}, feat_emb: {prod_feat_emb.shape}")
+
     for df in [temporal_all, textlen_all, te_user_all, te_prod_all, bert_train_df, bert_test_df]:
         if "id" in df.columns:
             df["id"] = df["id"].astype(str)
@@ -284,12 +321,31 @@ def assemble_features():
     del train_text, test_text
     gc.collect()
 
+    # 5b. Load char-level TF-IDF (pre-computed by text_chartfidf.py)
+    log.info("=== 5b. Load char-level TF-IDF ===")
+    try:
+        chartfidf_train, chartfidf_test, chartfidf_names = load_chartfidf(FEAT_DIR)
+        chartfidf_cols = [f"ctfidf_{i}" for i in range(chartfidf_train.shape[1])]
+
+        # Combine word-level + char-level TF-IDF (hstack)
+        tfidf_train = sparse.hstack([tfidf_train, chartfidf_train], format="csr")
+        tfidf_test = sparse.hstack([tfidf_test, chartfidf_test], format="csr")
+        tfidf_cols = tfidf_cols + chartfidf_cols
+        log.info(f"  Combined TF-IDF: train {tfidf_train.shape}, test {tfidf_test.shape}")
+        del chartfidf_train, chartfidf_test
+        gc.collect()
+    except FileNotFoundError:
+        log.warning("  Char-level TF-IDF not found, using word-level only")
+    except Exception as e:
+        log.warning(f"  Failed to load char-level TF-IDF: {e}. Using word-level only.")
+
     # 6. Build dense train features
     log.info("=== 6. Build dense train features ===")
     t0 = time.time()
     train_dense = build_dense(
         train_df, temporal_all, textlen_all, te_user_train, te_prod_train,
         bert_train_df, user_stats, product_stats, cat_stats, price_feats,
+        product_meta, prod_title_emb, prod_feat_emb, prod_emb2idx,
         user_emb, item_emb, user2idx, item2idx, is_train=True,
     )
     log.info(f"  Train dense built in {time.time()-t0:.1f}s")
@@ -327,12 +383,14 @@ def assemble_features():
     test_dense = build_dense(
         test_df, temporal_test, textlen_test, te_user_test, te_prod_test,
         bert_test_df, user_stats, product_stats, cat_stats, price_feats,
+        product_meta, prod_title_emb, prod_feat_emb, prod_emb2idx,
         user_emb, item_emb, user2idx, item2idx, is_train=False,
     )
     log.info(f"  Test dense built in {time.time()-t0:.1f}s")
 
     del temporal_test, textlen_test, te_user_test, te_prod_test, bert_test_df
     del user_stats, product_stats, cat_stats, price_feats
+    del product_meta, prod_title_emb, prod_feat_emb, prod_emb2idx, prod_emb_ids
     del user_emb, item_emb, user2idx, item2idx
     gc.collect()
 

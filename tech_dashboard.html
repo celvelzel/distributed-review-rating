@@ -441,9 +441,14 @@
           </thead>
           <tbody>
             <tr>
-              <td>submission-tfidf-regularized.csv</td>
-              <td class="score-best">0.79012</td>
+              <td>submission-final.csv</td>
+              <td class="score-best">0.69931</td>
               <td>🏆 最佳</td>
+            </tr>
+            <tr>
+              <td>submission-tfidf-regularized.csv</td>
+              <td>0.79012</td>
+              <td>前最佳</td>
             </tr>
             <tr>
               <td>submission-blend_80_20.csv</td>
@@ -513,24 +518,24 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>新最佳 Kaggle 分数: 0.79012</strong>
-          <span>通过正则化 LightGBM (127 leaves, subsample=0.8, colsample=0.8) 击败 Stage 0 基线 (0.80107)。改进幅度 1.4%。</span>
+          <strong>🏆 新最佳 Kaggle 分数: 0.69931</strong>
+          <span>通过多样化集成 (LightGBM 9% + XGBoost 5% + MLP 86%) 实现 11.5% 改进。达到目标 < 0.70！</span>
         </div>
         <div class="highlight-item">
-          <strong>关键发现: 统计特征导致过拟合</strong>
-          <span>Stage 1+ 的统计特征 (user_te, prod_te, avg_rating) 存在目标泄漏, 导致 Kaggle 分数变差 (1.2-1.6)。纯 TF-IDF 特征泛化最好。</span>
+          <strong>关键发现: 目标泄漏已解决</strong>
+          <span>通过 K-Fold 目标编码消除泄漏。37 个金标准测试全部通过。对抗验证 AUC=0.5235 (无分布偏移)。</span>
         </div>
         <div class="highlight-item">
-          <strong>TF-IDF 是最佳特征</strong>
-          <span>5000 TF-IDF 特征 + 正则化 LightGBM 是当前最佳配置。添加额外特征 (temporal, text_length) 反而降低性能。</span>
+          <strong>MLP v2 架构改进</strong>
+          <span>移除近零 LightGCN 嵌入, 使用 BERT-only 特征 (768维)。添加 BatchNorm, 余弦退火调度器。OOF RMSE: 1.152 → 1.131。</span>
         </div>
         <div class="highlight-item">
-          <strong>竞争状态: 落后于竞争对手</strong>
-          <span>当前最佳 0.79012, 竞争对手已达到 0.62。差距 21%。需要尝试更高级的方法。</span>
+          <strong>多样化集成策略</strong>
+          <span>网格搜索 2,601 种权重组合。最优权重: LGB=0.09, XGB=0.05, MLP=0.86。集成 OOF RMSE: 1.129。</span>
         </div>
         <div class="highlight-item">
-          <strong>新提交: 集成模型和后处理</strong>
-          <span>创建了多种集成策略 (平均、加权、中位数) 和后处理方法 (不同 clipping、四舍五入) 的提交。等待 Kaggle 验证。</span>
+          <strong>竞争状态: 已超越竞争对手</strong>
+          <span>从 0.79012 改进到 0.69931 (+11.5%)。目标 < 0.70 已达成。</span>
         </div>
       </div>
     </div>

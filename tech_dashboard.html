@@ -382,18 +382,25 @@
             <span>TF-IDF + LightGBM 基线，Kaggle=0.801 — 已完成</span>
           </div>
         </div>
+        <div class="roadmap-item completed">
+          <div class="roadmap-status">✓</div>
+          <div class="roadmap-text">
+            <strong>T24: 模型优化迭代</strong>
+            <span>TF-IDF + 正则化 LightGBM，Kaggle=0.790 — 已完成</span>
+          </div>
+        </div>
         <div class="roadmap-item active">
           <div class="roadmap-status">⚡</div>
           <div class="roadmap-text">
-            <strong>T24: 模型优化迭代</strong>
-            <span>TF-IDF + 正则化 LightGBM，Kaggle=0.790 — 进行中</span>
+            <strong>T25: 高级模型探索</strong>
+            <span>字符级 TF-IDF + XGBoost + SentenceTransformer — 进行中</span>
           </div>
         </div>
         <div class="roadmap-item future">
           <div class="roadmap-status">○</div>
           <div class="roadmap-text">
-            <strong>T25: 高级模型探索</strong>
-            <span>神经网络 / 更好的特征工程 — 待开始</span>
+            <strong>T26: Transformer 微调</strong>
+            <span>微调 DeBERTa-v3-large 直接预测评分 — 待开始</span>
           </div>
         </div>
       </div>
@@ -441,14 +448,9 @@
           </thead>
           <tbody>
             <tr>
-              <td>submission-final.csv</td>
-              <td class="score-best">0.69931</td>
-              <td>🏆 最佳</td>
-            </tr>
-            <tr>
               <td>submission-tfidf-regularized.csv</td>
-              <td>0.79012</td>
-              <td>前最佳</td>
+              <td class="score-best">0.79012</td>
+              <td>🏆 最佳</td>
             </tr>
             <tr>
               <td>submission-blend_80_20.csv</td>
@@ -518,24 +520,24 @@
       </div>
       <div class="highlights">
         <div class="highlight-item">
-          <strong>🏆 新最佳 Kaggle 分数: 0.69931</strong>
-          <span>通过多样化集成 (LightGBM 9% + XGBoost 5% + MLP 86%) 实现 11.5% 改进。达到目标 < 0.70！</span>
+          <strong>当前最佳 Kaggle 分数: 0.79012</strong>
+          <span>TF-IDF 5K + 正则化 LightGBM (127 leaves, subsample=0.8, colsample=0.8)。相比 Stage 0 基线 (0.80107) 改进 1.4%。</span>
         </div>
         <div class="highlight-item">
-          <strong>关键发现: 目标泄漏已解决</strong>
-          <span>通过 K-Fold 目标编码消除泄漏。37 个金标准测试全部通过。对抗验证 AUC=0.5235 (无分布偏移)。</span>
+          <strong>关键发现: 目标泄漏是主要问题</strong>
+          <span>统计特征 (user_te, prod_te, avg_rating) 存在目标泄漏, 导致本地 CV 好 (0.55) 但 Kaggle 差 (1.2-1.6)。纯 TF-IDF 特征泛化最好。</span>
         </div>
         <div class="highlight-item">
-          <strong>MLP v2 架构改进</strong>
-          <span>移除近零 LightGCN 嵌入, 使用 BERT-only 特征 (768维)。添加 BatchNorm, 余弦退火调度器。OOF RMSE: 1.152 → 1.131。</span>
+          <strong>TF-IDF 配置仍有优化空间</strong>
+          <span>当前仅使用词级 (1,1) n-gram。添加字符级 n-gram (char_wb, 2-5) 可捕捉拼写变体和词缀模式, 预计提升 5-10%。</span>
         </div>
         <div class="highlight-item">
-          <strong>多样化集成策略</strong>
-          <span>网格搜索 2,601 种权重组合。最优权重: LGB=0.09, XGB=0.05, MLP=0.86。集成 OOF RMSE: 1.129。</span>
+          <strong>MLP 性能不佳的原因</strong>
+          <span>DeBERTa 冻结嵌入 + LightGCN 的 MLP OOF RMSE = 1.152。原因: 嵌入未微调, 且与泄漏特征混合使用。需要单独使用 BERT 嵌入。</span>
         </div>
         <div class="highlight-item">
-          <strong>竞争状态: 已超越竞争对手</strong>
-          <span>从 0.79012 改进到 0.69931 (+11.5%)。目标 < 0.70 已达成。</span>
+          <strong>改进路线: 三阶段优化</strong>
+          <span>阶段1: 优化 TF-IDF 配置 (字符级 n-gram + 文本预处理)。阶段2: 多模型集成 (XGBoost + Ridge)。阶段3: SentenceTransformer 嵌入。</span>
         </div>
       </div>
     </div>
@@ -553,7 +555,7 @@
             <span>竞争对手领先 21%</span>
           </div>
           <div class="risk-desc">竞争对手已达到 0.62, 我们还在 0.79。差距巨大, 需要根本性的方法改进。</div>
-          <div class="risk-plan">可能需要: 神经网络, 更好的特征工程, 或完全不同的方法</div>
+          <div class="risk-plan">三阶段优化: TF-IDF 增强 → 多模型集成 → Transformer 微调</div>
         </div>
         <div class="risk-item">
           <div class="risk-title">
@@ -561,15 +563,15 @@
             <span>训练速度限制迭代</span>
           </div>
           <div class="risk-desc">TF-IDF 提取 (~93s) + LightGBM 训练 (~600s) 限制了参数搜索速度。每次实验需要 ~12 分钟。</div>
-          <div class="risk-plan">使用子采样进行快速迭代, 最终模型在全数据上训练</div>
+          <div class="risk-plan">使用子采样 (100K-200K) 进行快速迭代, 最终模型在全数据上训练</div>
         </div>
         <div class="risk-item">
           <div class="risk-title">
             <span>🟡</span>
-            <span>目标泄漏问题</span>
+            <span>嵌入质量不足</span>
           </div>
-          <div class="risk-desc">统计特征 (user_te, prod_te) 存在目标泄漏, 导致本地 CV 分数好但 Kaggle 分数差。</div>
-          <div class="risk-plan">只使用 TF-IDF 等无泄漏特征, 或使用 K-Fold 目标编码</div>
+          <div class="risk-desc">DeBERTa 冻结嵌入 + MLP 的 OOF RMSE = 1.152, 远差于 TF-IDF + LightGBM (1.176)。</div>
+          <div class="risk-plan">尝试 SentenceTransformer (all-MiniLM-L6-v2) 或微调 DeBERTa</div>
         </div>
         <div class="risk-item">
           <div class="risk-title">
@@ -607,6 +609,13 @@
           <li>正则化 (subsample, colsample) 有助于泛化</li>
           <li>集成/混合没有显著改善</li>
         </ul>
+        <p style="margin-top: 12px;"><strong>根因分析:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 8px;">
+          <li>统计特征 (user_te, prod_te) 存在目标泄漏 → Kaggle 分数 1.2-1.6</li>
+          <li>DeBERTa 嵌入 + MLP 效果差 (OOF RMSE 1.152) → 嵌入质量不足</li>
+          <li>TF-IDF 维度不足 (5K) → 无法捕捉所有文本模式</li>
+          <li>缺乏字符级特征 → 无法处理拼写变体和词缀</li>
+        </ul>
       </div>
     </div>
 
@@ -619,18 +628,28 @@
       <div style="font-size: 14px; color: var(--text-muted);">
         <p><strong>为了缩小与竞争对手的差距, 需要尝试:</strong></p>
         <ol style="margin-left: 20px; margin-top: 8px;">
-          <li><strong>神经网络</strong>: 使用预计算的 BERT 嵌入 (768维) 训练 MLP</li>
-          <li><strong>安装 XGBoost</strong>: 尝试不同的梯度提升算法</li>
-          <li><strong>字符级 N-gram</strong>: 尝试字符级特征</li>
-          <li><strong>更好的文本预处理</strong>: 不同的分词、清洗方法</li>
-          <li><strong>Transformer 微调</strong>: 直接微调预训练语言模型</li>
+          <li><strong>字符级 TF-IDF</strong>: 使用 char_wb 分析器, n-gram (2,5), 捕捉拼写变体</li>
+          <li><strong>更好的文本预处理</strong>: 小写化、移除特殊字符、词干提取</li>
+          <li><strong>增加 TF-IDF 维度</strong>: 从 5K 增加到 20K-50K</li>
+          <li><strong>XGBoost</strong>: 尝试不同的梯度提升算法</li>
+          <li><strong>SentenceTransformer</strong>: 使用 all-MiniLM-L6-v2 提取语义嵌入</li>
+          <li><strong>多模型集成</strong>: TF-IDF + LightGBM + XGBoost + Ridge</li>
+          <li><strong>DeBERTa 微调</strong>: 直接微调预训练语言模型</li>
         </ol>
+        <p style="margin-top: 12px;"><strong>预期改进:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 8px;">
+          <li>阶段 1 (优化 TF-IDF): 0.79 → 0.77-0.78</li>
+          <li>阶段 2 (多模型集成): 0.77 → 0.75-0.76</li>
+          <li>阶段 3 (BERT 嵌入): 0.75 → 0.70-0.72</li>
+          <li>阶段 4 (Transformer 微调): 0.70 → 0.65-0.68</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>详细分析:</strong> <a href="docs/changelog/accuracy-improvement-analysis.md" style="color: var(--accent);">accuracy-improvement-analysis.md</a></p>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-07 12:30:00</span></p>
+    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-09 21:30:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

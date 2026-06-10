@@ -1,8 +1,30 @@
 {
   "project": "COMP5434 Review Rating Prediction",
-  "last_updated": "2026-06-07T16:10:00",
-  "best_kaggle_score": 0.69931,
+  "last_updated": "2026-06-09T21:30:00",
+  "best_kaggle_score": 0.79012,
   "competitor_score": 0.62,
+  "improvement_plan": {
+    "phase_1": {
+      "name": "TF-IDF Enhancement",
+      "target": "0.77-0.78",
+      "methods": ["char_wb ngrams (2,5)", "better preprocessing", "increase dimensions to 20K-50K"]
+    },
+    "phase_2": {
+      "name": "Model Diversity",
+      "target": "0.75-0.76",
+      "methods": ["XGBoost", "Ridge regression", "multi-TF-IDF ensemble"]
+    },
+    "phase_3": {
+      "name": "Deep Learning",
+      "target": "0.70-0.72",
+      "methods": ["SentenceTransformer embeddings", "DeBERTa fine-tuning"]
+    },
+    "phase_4": {
+      "name": "Advanced Optimization",
+      "target": "<0.70",
+      "methods": ["learning rate scheduling", "data augmentation", "complex ensemble"]
+    }
+  },
   "stages": {
     "0": {
       "rmse": 1.17626,
@@ -10,9 +32,7 @@
       "train_time_sec": 392.96,
       "inference_time_sec": 0.2,
       "model": "tfidf_lgb",
-      "features": [
-        "tfidf_5000"
-      ],
+      "features": ["tfidf_5000"],
       "params": {
         "max_features": 5000,
         "sublinear_tf": true,
@@ -28,14 +48,7 @@
       "train_time_sec": 248.47,
       "inference_time_sec": 0.11,
       "model": "lgb_stats",
-      "features": [
-        "user_stats",
-        "prod_stats",
-        "temporal",
-        "text_length",
-        "te_user",
-        "te_prod"
-      ],
+      "features": ["user_stats", "prod_stats", "temporal", "text_length", "te_user", "te_prod"],
       "note": "LEAKAGE: Statistical features leak target info"
     },
     "2": {
@@ -44,32 +57,14 @@
       "train_time_sec": 2395.91,
       "inference_time_sec": 0.79,
       "model": "lgb_multimodal",
-      "features": [
-        "all",
-        "tfidf",
-        "user_stats",
-        "prod_stats",
-        "temporal",
-        "text_length",
-        "te_user",
-        "te_prod",
-        "bert_embeddings",
-        "price_features",
-        "category_stats"
-      ],
+      "features": ["all", "tfidf", "user_stats", "prod_stats", "temporal", "text_length", "te_user", "te_prod", "bert_embeddings", "price_features", "category_stats"],
       "note": "LEAKAGE: Multimodal features leak target info"
     },
     "catboost": {
       "oof_rmse": 0.54797,
       "kaggle_score": 1.18779,
       "mean_fold_rmse": 0.54797,
-      "fold_rmses": [
-        0.54878,
-        0.54761,
-        0.5478,
-        0.54828,
-        0.54737
-      ],
+      "fold_rmses": [0.54878, 0.54761, 0.5478, 0.54828, 0.54737],
       "train_time_sec": 10361.91,
       "model": "catboost",
       "features_used": 927,
@@ -84,9 +79,7 @@
     "stacking": {
       "oof_rmse": 0.54528,
       "model": "stacking_ridge",
-      "features": [
-        "all"
-      ],
+      "features": ["all"],
       "lgb_oof_rmse": 0.55239,
       "catboost_oof_rmse": 0.54797,
       "mlp_oof_rmse": 1.15201,
@@ -101,9 +94,7 @@
       "kaggle_score": 0.79012,
       "train_time_sec": 606,
       "model": "lgb_tfidf_regularized",
-      "features": [
-        "tfidf_5000"
-      ],
+      "features": ["tfidf_5000"],
       "params": {
         "n_estimators": 500,
         "num_leaves": 127,
@@ -113,175 +104,33 @@
       },
       "note": "BEST MODEL: No leakage, regularization helps"
     },
-    "xgboost": {
-      "oof_rmse": 1.20156,
-      "mean_fold_rmse": 1.20156,
-      "fold_std": 0.00067,
-      "fold_rmses": [
-        1.20201,
-        1.20208,
-        1.20092,
-        1.20058,
-        1.20222
-      ],
-      "train_time_sec": 2257.66,
-      "model": "xgboost",
-      "features": "tfidf_5000",
+    "mlp": {
+      "oof_rmse": 1.15201,
+      "model": "mlp_deberta_lightgcn",
+      "features": ["deberta_768", "user_emb_64", "item_emb_64"],
       "params": {
-        "learning_rate": 0.15,
-        "max_depth": 6,
-        "num_boost_round": 150,
-        "subsample": 0.8,
-        "colsample_bytree": 0.6,
-        "reg_alpha": 0.1,
-        "reg_lambda": 1.0,
-        "n_folds": 5
-      }
-    },
-    "ensemble_diverse": {
-      "oof_rmse": 1.12938,
-      "best_config": "grid_best",
-      "weights": {
-        "LGB": 0.09,
-        "XGBoost": 0.05,
-        "MLP": 0.86
+        "input_dim": 896,
+        "hidden_dims": [512, 256, 128],
+        "learning_rate": 0.001,
+        "epochs": 30,
+        "batch_size": 32768
       },
-      "lgb_oof_rmse": 1.19651,
-      "xgb_oof_rmse": 1.20156,
-      "mlp_oof_rmse": 1.13119,
-      "lgb_fold_rmses": [],
-      "total_time_sec": 23.16,
-      "model": "ensemble_weighted_avg",
-      "base_models": [
-        "LGB",
-        "XGBoost",
-        "MLP"
-      ]
+      "note": "FAILED: Frozen DeBERTa embeddings + LightGCN performed poorly"
     }
   },
   "kaggle_submissions": [
-    {
-      "file": "submission-tfidf-regularized.csv",
-      "score": 0.79012,
-      "date": "2026-06-06",
-      "note": "Best model"
-    },
-    {
-      "file": "submission-blend_80_20.csv",
-      "score": 0.79142,
-      "date": "2026-06-07",
-      "note": "Blend 80% best + 20% stage0"
-    },
-    {
-      "file": "submission-clip_1_5_round.csv",
-      "score": 0.79281,
-      "date": "2026-06-07",
-      "note": "Rounded to nearest 0.5"
-    },
-    {
-      "file": "stage0_submission.csv",
-      "score": 0.80107,
-      "date": "2026-06-06",
-      "note": "Baseline"
-    },
-    {
-      "file": "submission-stage0-repro.csv",
-      "score": 0.80109,
-      "date": "2026-06-06",
-      "note": "Baseline reproduction"
-    },
-    {
-      "file": "submission-ensemble-weighted.csv",
-      "score": 0.80276,
-      "date": "2026-06-07",
-      "note": "Weighted ensemble"
-    },
-    {
-      "file": "submission-ensemble.csv",
-      "score": 0.80706,
-      "date": "2026-06-07",
-      "note": "Equal weight ensemble"
-    },
-    {
-      "file": "submission-optimized-v1.csv",
-      "score": 0.84339,
-      "date": "2026-06-06",
-      "note": "TF-IDF + leakage-free features (worse)"
-    },
-    {
-      "file": "submission-tfidf-v2.csv",
-      "score": 0.86572,
-      "date": "2026-06-06",
-      "note": "50K subsample (worse)"
-    },
-    {
-      "file": "submission-lgb-kfold-final.csv",
-      "score": 1.18779,
-      "date": "2026-06-06",
-      "note": "K-Fold features (leakage)"
-    },
-    {
-      "file": "submission-260606-stage2.csv",
-      "score": 1.31628,
-      "date": "2026-06-06",
-      "note": "Multimodal (leakage)"
-    },
-    {
-      "file": "submission-260606-stage1.csv",
-      "score": 1.59341,
-      "date": "2026-06-06",
-      "note": "Stats features (leakage)"
-    }
-  ],
-  "new_submissions_pending": [
-    {
-      "file": "submission-ensemble_avg.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "Average of all submissions"
-    },
-    {
-      "file": "submission-ensemble_weighted.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "Weighted average (best=50%, baseline=20%)"
-    },
-    {
-      "file": "submission-ensemble_median.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "Median ensemble"
-    },
-    {
-      "file": "submission-clip_10_45.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "Clipped to [1.0, 4.5]"
-    },
-    {
-      "file": "submission-clip_15_50.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "Clipped to [1.5, 5.0]"
-    },
-    {
-      "file": "submission-rounded_05.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "Rounded to nearest 0.5"
-    },
-    {
-      "file": "submission-blend_90_9.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "90% best + 10% baseline"
-    },
-    {
-      "file": "submission-blend_70_30.csv",
-      "score": null,
-      "date": "2026-06-07",
-      "note": "70% best + 30% baseline"
-    }
+    {"file": "submission-tfidf-regularized.csv", "score": 0.79012, "date": "2026-06-06", "note": "Best model"},
+    {"file": "submission-blend_80_20.csv", "score": 0.79142, "date": "2026-06-07", "note": "Blend 80% best + 20% stage0"},
+    {"file": "submission-clip_1_5_round.csv", "score": 0.79281, "date": "2026-06-07", "note": "Rounded to nearest 0.5"},
+    {"file": "stage0_submission.csv", "score": 0.80107, "date": "2026-06-06", "note": "Baseline"},
+    {"file": "submission-stage0-repro.csv", "score": 0.80109, "date": "2026-06-06", "note": "Baseline reproduction"},
+    {"file": "submission-ensemble-weighted.csv", "score": 0.80276, "date": "2026-06-07", "note": "Weighted ensemble"},
+    {"file": "submission-ensemble.csv", "score": 0.80706, "date": "2026-06-07", "note": "Equal weight ensemble"},
+    {"file": "submission-optimized-v1.csv", "score": 0.84339, "date": "2026-06-06", "note": "TF-IDF + leakage-free features (worse)"},
+    {"file": "submission-tfidf-v2.csv", "score": 0.86572, "date": "2026-06-06", "note": "50K subsample (worse)"},
+    {"file": "submission-lgb-kfold-final.csv", "score": 1.18779, "date": "2026-06-06", "note": "K-Fold features (leakage)"},
+    {"file": "submission-260606-stage2.csv", "score": 1.31628, "date": "2026-06-06", "note": "Multimodal (leakage)"},
+    {"file": "submission-260606-stage1.csv", "score": 1.59341, "date": "2026-06-06", "note": "Stats features (leakage)"}
   ],
   "experiments_tried": [
     "TF-IDF features (5K, 8K, 10K, 15K, 20K)",
@@ -302,32 +151,16 @@
     "Ensemble/blending doesn't significantly improve over single best model",
     "Local CV RMSE can be misleading if there's target leakage",
     "More TF-IDF features (10K+) may help but training is slow",
-    "Different clipping ranges may improve score"
+    "Different clipping ranges may improve score",
+    "MLP with frozen DeBERTa + LightGCN embeddings performed poorly (OOF=1.152)",
+    "Character-level TF-IDF (char_wb ngrams) has not been tried yet"
   ],
   "ablations": {
-    "a_no_text": {
-      "rmse": null,
-      "delta_vs_full": null
-    },
-    "b_no_graph": {
-      "rmse": null,
-      "delta_vs_full": null
-    },
-    "c_no_stacking": {
-      "rmse": null,
-      "delta_vs_full": null
-    },
-    "d_no_kfold_te": {
-      "rmse": null,
-      "delta_vs_full": null
-    },
-    "e_tfidf_vs_bert": {
-      "rmse": null,
-      "delta_vs_full": null
-    },
-    "f_no_clip": {
-      "rmse": null,
-      "delta_vs_full": null
-    }
+    "a_no_text": {"rmse": null, "delta_vs_full": null},
+    "b_no_graph": {"rmse": null, "delta_vs_full": null},
+    "c_no_stacking": {"rmse": null, "delta_vs_full": null},
+    "d_no_kfold_te": {"rmse": null, "delta_vs_full": null},
+    "e_tfidf_vs_bert": {"rmse": null, "delta_vs_full": null},
+    "f_no_clip": {"rmse": null, "delta_vs_full": null}
   }
 }

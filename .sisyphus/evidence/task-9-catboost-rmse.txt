@@ -1,0 +1,45 @@
+{
+  "task": "Task 9: CatBoost + Safe Target Encoding",
+  "oof_rmse": 1.39128,
+  "mean_fold_rmse": 1.39128,
+  "fold_rmses": [
+    1.39121,
+    1.39302,
+    1.38836,
+    1.39198,
+    1.39181
+  ],
+  "target_rmse": 1.15,
+  "passed": false,
+  "analysis": {
+    "baseline_rmse_predict_mean": 1.42192,
+    "improvement_over_baseline_pct": 2.15,
+    "root_cause": "Safe TE features are smoothed group means (user/product/category avg ratings) with counts. They encode ~3.94 mean with limited variance. CatBoost cannot learn individual-level patterns from group-level aggregates. This is an information-theoretic ceiling, not a tuning issue.",
+    "feature_signal": "All 5 features are near-constant around 3.94 (y mean). user_te range [2.23,4.71], prod_te [1.92,4.70], cat_te [3.54,4.26]. The narrow cat_te range shows categories have nearly identical avg ratings."
+  },
+  "best_params": {
+    "iterations": 4000,
+    "learning_rate": 0.05375,
+    "depth": 6,
+    "l2_leaf_reg": 13.132,
+    "bagging_temperature": 0.891,
+    "random_strength": 0.123,
+    "border_count": 254,
+    "grow_policy": "SymmetricTree",
+    "subsample": 0.759,
+    "colsample_bylevel": 1.0
+  },
+  "hpo_best_rmse": 1.39136,
+  "n_optuna_trials": 100,
+  "n_folds": 5,
+  "features": [
+    "user_te",
+    "prod_te",
+    "cat_te",
+    "user_count",
+    "prod_count"
+  ],
+  "n_samples": 3007439,
+  "hpo_time_sec": 3459.68,
+  "train_time_sec": 488.07
+}

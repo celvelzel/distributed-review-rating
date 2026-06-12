@@ -1,0 +1,37 @@
+Task 8: XGBoost + Char TF-IDF 30K + Text Stats
+==================================================
+
+Features:
+  - char_tfidf_30k: 30000 dims (char n-gram TF-IDF)
+  - text_stats: 5 dims (char_count, word_count, punct_ratio, upper_ratio, digit_ratio)
+  - Combined: 30005 features
+
+Optuna HPO:
+  - Trials: 50 (limited by 30K-feature histogram computation speed)
+  - Subsample: 3,000 rows (2-fold CV)
+  - Best trial #22: RMSE=1.29057
+  - Best params:
+      learning_rate: 0.0731
+      max_depth: 3
+      colsample_bytree: 0.073
+      num_boost_round: 244
+  - Note: 30K features cause extreme slowness in XGBoost hist algorithm
+    (~2-3 min/trial even with aggressive colsample=0.03-0.2)
+
+Final OOF (GPU, max_bin=16, 200K subsample):
+  - Subsample: 200,000 rows (5-fold CV)
+  - Parameters: lr=0.08, max_depth=8, colsample=0.4, max_bin=16, 500 rounds
+  - Overall OOF RMSE: 1.19810
+  - Fold RMSEs: [1.19966, 1.20018, 1.19839, 1.18912, 1.2031]
+  - Mean fold RMSE: 1.19809 +/- 0.00474
+
+300K subsample (partial, folds 1-2 only):
+  - Fold 1 RMSE: 1.19550 (1030 rounds)
+  - Fold 2 RMSE: 1.18354 (1451 rounds)
+  - Indicating convergence toward ~1.185-1.190 with more data
+
+Target: OOF RMSE < 1.10
+Result: FAIL (1.19810)
+Note: Char TF-IDF 30K features are inherently slow for XGBoost (30K feature
+histograms). GPU OOM limits data size. With more GPU memory or CPU time,
+RMSE could approach ~1.15-1.18 with full 3M data.

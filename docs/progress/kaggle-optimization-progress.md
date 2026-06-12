@@ -66,20 +66,45 @@
 
 ## Wave 2: Model Training (Partially Completed)
 
-### Task 6: DeBERTa E2E 微调 🔄 Running
-- **Duration**: 25h+ (still running)
+### Task 6: DeBERTa E2E 微调 — 双线并行方案 🔄
+
+**=== DUAL-TRACK APPROACH ===**
+为在 RTX 3080 Ti 36 小时预算内完成 DeBERTa 微调，采用双线并行策略：
+
+| Track | Script | Strategy | Folds × Epochs | 预估时间 |
+|-------|--------|----------|----------------|---------|
+| **A: 全参数微调** | `transformer_e2e.py` | Option C 参数 | 4f × 4e | ~10.4h |
+| **B: LoRA 微调** | `deberta_lora.py` | LoRA r=16 | 5f × 5e | ~10h |
+
+**Track A 当前状态** (transformer_e2e.py):
+- **Duration**: 25h+ (still running with OLD params: 5f × 5e)
 - **Current Progress**: Fold 1, Epoch 2, step 188K/200K
 - **Speed**: 85 steps/s
-- **Config**:
+- **Config (OLD — will be updated)**:
   - Model: microsoft/deberta-v3-base (86M params)
-  - Pooling: Mean Pooling (NOT [CLS])
-  - Loss: CORAL Ordinal Loss + R-Drop (α=0.5)
   - BS=12, GradAcc=21 (effective BS=252)
-  - lr=3e-5, Cosine scheduler, 5 epochs, patience=3
-  - FP16, Gradient checkpointing
-- **Current Loss**: ~0.3-0.5 (CORAL + R-Drop)
-- **RSS**: 7.1GB
+  - lr=3e-5, Cosine scheduler
+  - **参数已更新为 Option C: 4 folds × 4 epochs**
 - **Estimated Remaining**: ~13h (4 more folds × 3.25h each)
+
+**Track B 状态** (deberta_lora.py):
+- **Status**: 新脚本已创建，待运行
+- **Config**:
+  - Model: microsoft/deberta-v3-base + LoRA (r=16, alpha=32)
+  - Target modules: query, value
+  - Trainable params: ~0.5-3M (vs 86M full)
+  - BS=16, GradAcc=16 (effective BS=256)
+  - lr=3e-5, Cosine scheduler, 5 epochs, patience=3
+  - FP16, Gradient checkpointing DISABLED
+- **预计优势**:
+  - 显存: ~2-3GB (vs 4.4GB full)
+  - 速度: ~50% faster per epoch
+  - 过拟合风险: 更低 (参数少)
+  - 可跑更多 folds/epochs (5f × 5e in ~10h)
+
+**对比计划**:
+- 两个 Track 完成后对比 OOF RMSE
+- 选择更优的 Track 用于最终 Stacking 集成
 
 ### Task 7: LightGBM + TF-IDF 50K + SVD 🔄 Running
 - **Duration**: 25h+ (still running)
@@ -129,7 +154,8 @@
 
 | Model | OOF Shape | RMSE | Target | Status |
 |-------|-----------|------|--------|--------|
-| DeBERTa E2E | (3M,) | TBD | < 1.05 | 🔄 Training |
+| DeBERTa E2E (Track A: Full FT) | (3M,) | TBD | < 1.05 | 🔄 Training (4f × 4e) |
+| DeBERTa LoRA (Track B: LoRA) | (3M,) | TBD | < 1.05 | ⏳ Pending (5f × 5e) |
 | LightGBM + TF-IDF 50K | TBD | TBD | < 1.10 | 🔄 Training |
 | XGBoost + Char TF-IDF | (200K,) | 1.239 | < 1.10 | ❌ FAIL |
 | CatBoost + Safe TE | (3M,) | 1.391 | < 1.15 | ❌ FAIL |
@@ -159,6 +185,11 @@
 - Safe TE features are smoothed group means with limited discriminative power
 - Baseline RMSE (predict mean) = 1.42, CatBoost only improves to 1.39
 - This is an information-theoretic ceiling, not a tuning issue
+
+### 5. HPC Job Time Limits (NEW)
+- RTX 3080 Ti HPC 每次作业限制 36 小时
+- DeBERTa 微调总时间可能超过单次作业限制
+- **解决**: 添加了 checkpoint 断点续训机制
 
 ---
 
@@ -200,7 +231,8 @@
 ## File Manifest
 
 ### Scripts Created
-- `code/models/transformer_e2e.py` — DeBERTa E2E (Mean Pooling + R-Drop + CORAL)
+- `code/models/transformer_e2e.py` — DeBERTa E2E (Mean Pooling + R-Drop + CORAL) — Track A
+- `code/models/deberta_lora.py` — DeBERTa LoRA (Mean Pooling + R-Drop + CORAL) — Track B
 - `code/models/lgb_tfidf50k_svd.py` — LightGBM + TF-IDF 50K + SVD
 - `code/models/xgb_char_tfidf.py` — XGBoost + Char TF-IDF 30K
 - `code/models/catboost_target_encoding.py` — CatBoost + Safe TE

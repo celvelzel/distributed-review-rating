@@ -1,46 +1,40 @@
 #!/usr/bin/env python
-"""DeBERTa-v3-base E2E fine-tuning with Mean Pooling + R-Drop + CORAL.
+"""DeBERTa-v3-base LoRA fine-tuning with Mean Pooling + CORAL.
 
 === DUAL-TRACK APPROACH ===
-This script is Track A: Full fine-tuning with Option C parameters.
-Track B: LoRA fine-tuning (see deberta_lora.py) — faster, less memory.
+This script is Track B: LoRA fine-tuning — faster, less memory.
+Track A: Full fine-tuning (see transformer_e2e.py) — Option C parameters.
 We run both in parallel to compare results within the 36h budget.
 
-Implements ALL 7 fixes from task-1 diagnosis:
-    1. Mean Pooling (NOT [CLS]) — averages all token embeddings
-    2. CORAL Ordinal Loss (NOT MSE) — 4 binary cumulative tasks
-    3. R-Drop regularization — two forward passes, KL consistency
-    4. lr=3e-5 (was 2e-5)
-    5. 4 epochs, patience=3 (Option C: reduced from 5 for 36h budget)
-    6. BS=12 + GradAcc=21 = effective BS=252 (was BS=64)
-    7. deberta-v3-base 86M params (was deberta-v3-small 44M)
-    + Cosine LR scheduler (was linear)
-
-Option C Parameters (36h budget on RTX 3080 Ti):
-    4 folds × 4 epochs = ~10.4h pure training
-    Estimated wall clock: ~20h (with GPU contention)
+LoRA Advantages:
+    - Only ~0.5-3M trainable params (vs 86M full)
+    - 2-3GB VRAM (vs 4.4GB full)
+    - ~50% faster training per epoch
+    - Lower overfitting risk
+    - Can run 5 folds × 5 epochs in ~10h (vs full 4f × 4e in ~10.4h)
 
 Architecture:
-    deberta-v3-base → Mean Pooling → Dropout(0.1) → Linear(768, 4)
+    deberta-v3-base (frozen) + LoRA adapters (r=16, alpha=32)
+    → Mean Pooling → Dropout(0.1) → Linear(768, 4)
     Prediction: 1 + sigmoid(logits).sum(dim=1) → continuous [1, 5]
 
 Training:
     Loss: CORAL ordinal (4 binary cumulative) + R-Drop MSE consistency
     Optimizer: AdamW (lr=3e-5, weight_decay=0.01)
     Scheduler: Cosine with linear warmup (10%)
-    Batch: 12, GradAcc: 21 (effective BS=252)
-    Epochs: 4, Early stopping patience=3
-    Mixed precision: FP16, Gradient checkpointing
+    Batch: 16, GradAcc: 16 (effective BS=256)
+    Epochs: 5, Early stopping patience=3
+    Mixed precision: FP16, Gradient checkpointing DISABLED (LoRA saves memory)
 
 Strategy:
     Input: title + comment concatenated, pre-tokenized (SeqLen=128)
-    4-fold OOF validation (Option C: reduced from 5 for time budget)
+    5-fold OOF validation
     IndexedDataset avoids tensor copies (memory-efficient)
     Fold models predict test set → averaged
 
 Outputs:
-    artifacts/models/deberta_e2e_oof.npy   (3,007,439,)
-    artifacts/models/deberta_e2e_test.npy  (10,000,)
+    artifacts/models/deberta_lora_oof.npy   (3,007,439,)
+    artifacts/models/deberta_lora_test.npy  (10,000,)
 """
 
 from __future__ import annotations
@@ -49,9 +43,8 @@ import gc
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
-# ── MUST set before importing transformers/torch to avoid fork deadlock ──
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import numpy as np
@@ -62,10 +55,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torch.amp import GradScaler, autocast
 
-# ── path setup ─────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parents[2]
 
-# ── constants ──────────────────────────────────────────────────────────
 ETL_DIR = ROOT / "artifacts" / "etl"
 FEAT_DIR = ROOT / "artifacts" / "features"
 MODEL_DIR = ROOT / "artifacts" / "models"
@@ -75,61 +66,51 @@ TRAIN_PATH = ETL_DIR / "train.parquet"
 TEST_PATH = ETL_DIR / "test.parquet"
 Y_TRAIN_PATH = FEAT_DIR / "y_train.npy"
 
-OOF_PATH = MODEL_DIR / "deberta_e2e_oof.npy"
-TEST_PRED_PATH = MODEL_DIR / "deberta_e2e_test.npy"
-CHECKPOINT_DIR = MODEL_DIR / "checkpoints"
+OOF_PATH = MODEL_DIR / "deberta_lora_oof.npy"
+TEST_PRED_PATH = MODEL_DIR / "deberta_lora_test.npy"
+CHECKPOINT_DIR = MODEL_DIR / "checkpoints_lora"
 CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 EVIDENCE_DIR = ROOT / ".sisyphus" / "evidence"
 EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-EVIDENCE_PATH = EVIDENCE_DIR / "task-6-deberta-rmse.txt"
-CHANGELOG_PATH = ROOT / "docs" / "changelog" / "deberta-e2e-training.md"
+EVIDENCE_PATH = EVIDENCE_DIR / "task-lora-deberta-rmse.txt"
+CHANGELOG_PATH = ROOT / "docs" / "changelog" / "deberta-lora-training.md"
 
-# ── Model config (FIX #7: deberta-v3-base instead of small) ───────────
-MODEL_NAME = "microsoft/deberta-v3-base"  # 86M params (was: small 44M)
-MAX_LENGTH = 128  # Use pre-cached tokens (same tokenizer for base/small)
+MODEL_NAME = "microsoft/deberta-v3-base"
+MAX_LENGTH = 128
 
-# ── Training config (FIXES #4, #5, #6) ────────────────────────────────
 RANDOM_SEED = 42
-N_FOLDS = 4               # Option C: 4 folds (was 5) for 36h budget
-N_EPOCHS = 4              # Option C: 4 epochs (was 5) for 36h budget
+N_FOLDS = 5
+N_EPOCHS = 5
 PATIENCE = 3
-BATCH_SIZE = 12           # FIX #6: was 64 (reduced from 16 for RAM OOM safety)
-GRAD_ACCUM_STEPS = 21     # FIX #6: effective BS = 12 × 21 = 252 ≈ 256
-LR = 3e-5                 # FIX #4: was 2e-5
+BATCH_SIZE = 16
+GRAD_ACCUM_STEPS = 16
+LR = 3e-5
 WEIGHT_DECAY = 0.01
 WARMUP_RATIO = 0.1
-R_DROP_ALPHA = 0.5        # FIX #3: R-Drop consistency loss weight
+R_DROP_ALPHA = 0.5
 FP16 = True
-NUM_WORKERS = 0  # Must be 0: worker processes fork+copy 4.6GB tensors → OOM
+NUM_WORKERS = 0
 
-# CORAL config (FIX #2)
-N_CLASSES = 5             # Ratings 1-5
-N_TASKS = N_CLASSES - 1   # 4 binary cumulative tasks
+N_CLASSES = 5
+N_TASKS = N_CLASSES - 1
 
-# ── device ─────────────────────────────────────────────────────────────
+LORA_R = 16
+LORA_ALPHA = 32
+LORA_DROPOUT = 0.05
+LORA_TARGET_MODULES = ["query", "value"]
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 N_GPU = torch.cuda.device_count() if torch.cuda.is_available() else 0
-print(f"Device: {DEVICE} | GPUs: {N_GPU}")
-if N_GPU > 0:
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
 
 
-def print_gpu_memory(tag: str = "") -> None:
-    """Print current GPU memory usage."""
+def print_gpu_memory(label: str) -> None:
     if torch.cuda.is_available():
-        alloc = torch.cuda.memory_allocated() / 1024**3
-        reserv = torch.cuda.memory_reserved() / 1024**3
-        print(f"  GPU mem [{tag}]: allocated={alloc:.2f}GB, reserved={reserv:.2f}GB")
+        allocated = torch.cuda.memory_allocated() / 1e9
+        reserved = torch.cuda.memory_reserved() / 1e9
+        print(f"  GPU mem [{label}]: alloc={allocated:.2f}GB reserved={reserved:.2f}GB")
 
 
-# ── memory-efficient indexed dataset ──────────────────────────────────
 class IndexedDataset(Dataset):
-    """Dataset that indexes into pre-tokenized tensors without copying.
-
-    Stores references to the full tensors + an index array.
-    __getitem__ returns items by looking up the index, avoiding tensor copies.
-    """
-
     def __init__(
         self,
         input_ids: torch.Tensor,
@@ -138,68 +119,48 @@ class IndexedDataset(Dataset):
         labels: Optional[torch.Tensor] = None,
         indices: Optional[np.ndarray] = None,
     ):
-        self.input_ids = input_ids
-        self.attention_mask = attention_mask
-        self.token_type_ids = token_type_ids
-        self.labels = labels
         if indices is not None:
-            self.indices = torch.from_numpy(indices.astype(np.int64))
+            self.input_ids = input_ids[indices]
+            self.attention_mask = attention_mask[indices]
+            self.token_type_ids = token_type_ids[indices]
+            if labels is not None:
+                self.labels = labels[indices]
+            else:
+                self.labels = None
         else:
-            self.indices = torch.arange(len(input_ids))
+            self.input_ids = input_ids
+            self.attention_mask = attention_mask
+            self.token_type_ids = token_type_ids
+            self.labels = labels
 
-    def __len__(self) -> int:
-        return len(self.indices)
+    def __len__(self):
+        return len(self.input_ids)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, ...]:
-        real_idx = self.indices[idx]
-        items = (
-            self.input_ids[real_idx],
-            self.attention_mask[real_idx],
-            self.token_type_ids[real_idx],
-        )
+    def __getitem__(self, idx):
         if self.labels is not None:
-            items = items + (self.labels[real_idx],)
-        return items
+            return self.input_ids[idx], self.attention_mask[idx], self.token_type_ids[idx], self.labels[idx]
+        return self.input_ids[idx], self.attention_mask[idx], self.token_type_ids[idx]
 
 
-# ── data loading & tokenization ───────────────────────────────────────
-def load_and_tokenize(
-    path: Path,
-    tokenizer,
-    max_length: int = MAX_LENGTH,
-    cache_path: Optional[Path] = None,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]:
-    """Load text data and pre-tokenize. Returns (input_ids, attention_mask, token_type_ids, ids).
-
-    Caches tokenized tensors to disk to avoid re-tokenizing.
-    """
+def load_and_tokenize(path, tokenizer, max_length, cache_path=None):
     if cache_path and cache_path.exists():
-        print(f"  Loading cached tokens from {cache_path.name} ...")
-        data = np.load(str(cache_path), allow_pickle=True)
-        # Explicit copy to torch tensors (breaks numpy reference, frees RAM)
-        input_ids = torch.from_numpy(np.array(data["input_ids"])).to(torch.int32)
-        attention_mask = torch.from_numpy(np.array(data["attention_mask"])).to(torch.int32)
-        token_type_ids = torch.from_numpy(np.array(data["token_type_ids"])).to(torch.int32)
+        print(f"  Loading cached tokens from {cache_path.name}")
+        data = np.load(str(cache_path))
+        input_ids = torch.from_numpy(data["input_ids"]).to(torch.int32)
+        attention_mask = torch.from_numpy(data["attention_mask"]).to(torch.int32)
+        token_type_ids = torch.from_numpy(data["token_type_ids"]).to(torch.int32)
         ids = data["ids"]
-        del data
-        gc.collect()
-        cached_len = input_ids.shape[1]
-        print(f"    Loaded {len(ids):,} samples, seq_len={cached_len}")
-        if cached_len != max_length:
-            print(f"    WARNING: cached seq_len={cached_len} != requested max_length={max_length}")
-            print(f"    Using cached tokens at seq_len={cached_len}")
+        print(f"    Loaded: input_ids={input_ids.shape}")
         return input_ids, attention_mask, token_type_ids, ids
 
-    print(f"  Loading {path.name} ...")
-    cols = ["id", "title", "comment"]
-    df = pd.read_parquet(path, columns=cols)
+    import pyarrow.parquet as pq
+    df = pq.read_table(str(path)).to_pandas()
     ids = df["id"].values
     texts = (df["title"].fillna("") + " " + df["comment"].fillna("")).tolist()
     del df
     gc.collect()
     print(f"    Loaded {len(texts):,} samples")
 
-    # Tokenize in chunks to manage memory
     chunk_size = 100_000
     all_input_ids = []
     all_attention_mask = []
@@ -233,7 +194,6 @@ def load_and_tokenize(
     del all_input_ids, all_attention_mask, all_token_type_ids
     gc.collect()
 
-    # Save cache
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
@@ -247,128 +207,6 @@ def load_and_tokenize(
 
     print(f"    Tokenized: input_ids={input_ids.shape} dtype={input_ids.dtype}")
     return input_ids, attention_mask, token_type_ids, ids
-
-
-# ── FIX #1: Mean Pooling Model (NOT [CLS]) ───────────────────────────
-class DeBERTaMeanPoolRegressor(nn.Module):
-    """DeBERTa-v3-base with mean pooling for ordinal regression.
-
-    FIX #1: Mean pooling instead of [CLS] token pooling.
-        - Averages all non-padded token embeddings
-        - More robust for regression tasks (3-8% improvement)
-        - DeBERTa [CLS] not trained with NSP, less informative
-
-    FIX #2: Outputs K-1=4 logits for CORAL ordinal loss.
-        - Each logit predicts P(rating > k) for k in {1,2,3,4}
-        - Final prediction: 1 + sigmoid(logits).sum() ∈ [1, 5]
-    """
-
-    def __init__(self, model_name: str, num_tasks: int = N_TASKS, dropout: float = 0.1):
-        super().__init__()
-        from transformers import AutoModel
-
-        self.backbone = AutoModel.from_pretrained(model_name)
-        self.dropout = nn.Dropout(dropout)
-        # FIX #2: 4 outputs for CORAL ordinal (not 1 for regression)
-        self.classifier = nn.Linear(self.backbone.config.hidden_size, num_tasks)
-        self.num_tasks = num_tasks
-
-        # Gradient checkpointing: DISABLED to reduce CPU RAM (GPU has room)
-        # self.backbone.gradient_checkpointing_enable()
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        token_type_ids: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Forward pass with mean pooling. Returns logits (B, num_tasks)."""
-        outputs = self.backbone(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-        )
-        # FIX #1: Mean pooling — average non-padded token embeddings
-        hidden = outputs.last_hidden_state  # (B, L, H)
-        mask = attention_mask.unsqueeze(-1).float()  # (B, L, 1)
-        pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)  # (B, H)
-
-        logits = self.classifier(self.dropout(pooled))  # (B, num_tasks)
-        return logits
-
-
-# ── FIX #2: CORAL Ordinal Loss ───────────────────────────────────────
-class CORALLoss(nn.Module):
-    """CORAL (Consistent Rank Logits) loss for ordinal regression.
-
-    Decomposes K-class ordinal problem into K-1 binary tasks.
-    For ratings 1-5, creates 4 binary classifiers:
-      - Task 0: P(rating > 1) = P(rating ∈ {2,3,4,5})
-      - Task 1: P(rating > 2) = P(rating ∈ {3,4,5})
-      - Task 2: P(rating > 3) = P(rating ∈ {4,5})
-      - Task 3: P(rating > 4) = P(rating = 5)
-
-    Why CORAL over MSE:
-        - MSE treats all errors equally (predicting 5 for true 1 = same as 2 for true 1)
-        - CORAL models ordinal structure explicitly
-        - Expected improvement: 3-8% RMSE reduction
-    """
-
-    def __init__(self, num_classes: int = N_CLASSES):
-        super().__init__()
-        self.num_classes = num_classes
-
-    def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """Compute CORAL loss.
-
-        Args:
-            logits: (B, K-1) raw logits from model
-            labels: (B,) ratings in {1, 2, 3, 4, 5}
-
-        Returns:
-            Scalar loss (mean BCE across all thresholds)
-        """
-        # Shift labels to {0,1,2,3,4}
-        labels_shifted = labels.long() - 1  # (B,)
-
-        # Create ordinal targets: for each threshold k, target = (label > k)
-        targets = torch.zeros(
-            logits.size(0), self.num_classes - 1, device=logits.device, dtype=logits.dtype
-        )
-        for k in range(self.num_classes - 1):
-            targets[:, k] = (labels_shifted > k).float()
-
-        # Binary cross-entropy for each threshold (shared logits)
-        loss = F.binary_cross_entropy_with_logits(logits, targets, reduction="mean")
-        return loss
-
-
-def logits_to_rating(logits: torch.Tensor) -> torch.Tensor:
-    """Convert CORAL logits to continuous rating prediction in [1, 5].
-
-    Each logit predicts P(rating > k). Sum of sigmoid(logits) gives
-    expected number of thresholds exceeded, shifted by +1 for rating range.
-
-    Args:
-        logits: (B, K-1) raw logits
-
-    Returns:
-        (B,) continuous ratings in [1, 5]
-    """
-    return 1.0 + torch.sigmoid(logits).sum(dim=1)
-
-
-# ── FIX #3: R-Drop consistency loss ──────────────────────────────────
-def r_drop_consistency_loss(logits1: torch.Tensor, logits2: torch.Tensor) -> torch.Tensor:
-    """R-Drop consistency loss: symmetric KL divergence between two predictions.
-
-    For CORAL logits (multiple binary tasks), we compute element-wise
-    KL divergence between Bernoulli distributions:
-        KL(p||q) + KL(q||p) for each task, averaged.
-
-    Simplified to MSE between logits for numerical stability.
-    """
-    return F.mse_loss(logits1, logits2)
 
 
 # ── checkpoint save/load ─────────────────────────────────────────────
@@ -387,7 +225,6 @@ def save_checkpoint(
     fold_rmses: List[float],
     completed_folds: int,
 ) -> None:
-    """Save full training state to checkpoint for HPC resume."""
     ckpt_path = CHECKPOINT_DIR / f"fold{fold}_epoch{epoch}.pt"
     torch.save({
         "fold": fold,
@@ -409,27 +246,17 @@ def save_checkpoint(
             "batch_size": BATCH_SIZE,
             "grad_accum_steps": GRAD_ACCUM_STEPS,
             "lr": LR,
-            "weight_decay": WEIGHT_DECAY,
-            "warmup_ratio": WARMUP_RATIO,
-            "r_drop_alpha": R_DROP_ALPHA,
-            "n_classes": N_CLASSES,
-            "n_tasks": N_TASKS,
-            "max_length": MAX_LENGTH,
-            "fp16": FP16,
+            "lora_r": LORA_R,
+            "lora_alpha": LORA_ALPHA,
         },
     }, str(ckpt_path))
     print(f"  [CKPT] Saved: {ckpt_path.name}")
-
-    # Also save latest checkpoint pointer
     latest_path = CHECKPOINT_DIR / "latest.txt"
     latest_path.write_text(str(ckpt_path.name))
-
-    # Keep only best + latest to save disk space
     _cleanup_checkpoints(fold, epoch)
 
 
 def _cleanup_checkpoints(current_fold: int, current_epoch: int) -> None:
-    """Remove old epoch checkpoints, keep only best and latest."""
     ckpts = sorted(CHECKPOINT_DIR.glob("fold*_epoch*.pt"))
     by_fold = {}
     for c in ckpts:
@@ -437,67 +264,130 @@ def _cleanup_checkpoints(current_fold: int, current_epoch: int) -> None:
         f = int(parts[0].replace("fold", ""))
         e = int(parts[1].replace("epoch", ""))
         by_fold.setdefault(f, []).append((e, c))
-
     for f, epochs in by_fold.items():
         if f < current_fold:
-            # Completed folds: keep only best epoch
             epochs_sorted = sorted(epochs, key=lambda x: x[0])
-            best_ckpt = max(epochs, key=lambda x: x[0])  # keep last (usually best)
+            best_ckpt = max(epochs, key=lambda x: x[0])
             for e, c in epochs_sorted:
                 if c != best_ckpt[1]:
                     c.unlink(missing_ok=True)
         elif f == current_fold:
-            # Current fold: keep latest only
             epochs_sorted = sorted(epochs, key=lambda x: x[0])
             for e, c in epochs_sorted[:-1]:
                 c.unlink(missing_ok=True)
 
 
+def _cleanup_all_checkpoints() -> None:
+    for f in CHECKPOINT_DIR.glob("fold*_epoch*.pt"):
+        f.unlink(missing_ok=True)
+    for f in CHECKPOINT_DIR.glob("*.txt"):
+        f.unlink(missing_ok=True)
+    oof_ckpt = CHECKPOINT_DIR / "oof_state.pt"
+    if oof_ckpt.exists():
+        oof_ckpt.unlink()
+    print("  [CKPT] All checkpoints cleaned up after successful completion")
+
+
 def load_latest_checkpoint() -> Optional[dict]:
-    """Load the latest checkpoint if it exists. Returns None if no checkpoint."""
     latest_path = CHECKPOINT_DIR / "latest.txt"
     if not latest_path.exists():
         return None
-
     ckpt_name = latest_path.read_text().strip()
     ckpt_path = CHECKPOINT_DIR / ckpt_name
     if not ckpt_path.exists():
         print(f"  [CKPT] Checkpoint file not found: {ckpt_name}")
         return None
-
     print(f"  [CKPT] Resuming from: {ckpt_name}")
     return torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
 
 
 def save_fold_model(fold: int, model: nn.Module, val_rmse: float) -> None:
-    """Save final fold model weights."""
-    path = MODEL_DIR / f"deberta_e2e_fold{fold}.pt"
+    path = MODEL_DIR / f"deberta_lora_fold{fold}.pt"
     torch.save(model.state_dict(), str(path))
     print(f"  Fold {fold} model saved -> {path.name} (val_rmse={val_rmse:.5f})")
 
 
-def load_fold_model(fold: int, model: nn.Module) -> bool:
-    """Load fold model weights if exists. Returns True if loaded."""
-    path = MODEL_DIR / f"deberta_e2e_fold{fold}.pt"
-    if path.exists():
-        model.load_state_dict(torch.load(str(path), map_location="cpu", weights_only=True))
-        print(f"  Fold {fold} model loaded <- {path.name}")
-        return True
-    return False
+def _save_oof_checkpoint(oof: np.ndarray, fold_rmses: List[float], completed_folds: int) -> None:
+    state = {"oof": oof, "fold_rmses": fold_rmses, "completed_folds": completed_folds}
+    path = CHECKPOINT_DIR / "oof_state.pt"
+    torch.save(state, str(path))
 
 
-# ── training ───────────────────────────────────────────────────────────
+class DeBERTaLoRAModel(nn.Module):
+    """DeBERTa-v3-base with LoRA adapters + Mean Pooling for CORAL ordinal regression."""
+
+    def __init__(self, model_name: str, num_tasks: int = N_TASKS):
+        super().__init__()
+        from transformers import AutoModel
+        from peft import LoraConfig, get_peft_model
+
+        base_model = AutoModel.from_pretrained(model_name)
+
+        lora_config = LoraConfig(
+            r=LORA_R,
+            lora_alpha=LORA_ALPHA,
+            target_modules=LORA_TARGET_MODULES,
+            lora_dropout=LORA_DROPOUT,
+            bias="none",
+        )
+
+        self.backbone = get_peft_model(base_model, lora_config)
+        self.dropout = nn.Dropout(0.1)
+        self.classifier = nn.Linear(base_model.config.hidden_size, num_tasks)
+        self.num_tasks = num_tasks
+
+        self.backbone.print_trainable_parameters()
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        token_type_ids: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        outputs = self.backbone(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+        )
+        hidden = outputs.last_hidden_state
+        mask = attention_mask.unsqueeze(-1).float()
+        pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+
+        logits = self.classifier(self.dropout(pooled))
+        return logits
+
+
+class CORALLoss(nn.Module):
+    def __init__(self, num_classes: int = N_CLASSES):
+        super().__init__()
+        self.num_classes = num_classes
+
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        labels_shifted = labels.long() - 1
+        targets = torch.zeros(
+            logits.size(0), self.num_classes - 1, device=logits.device, dtype=logits.dtype
+        )
+        for k in range(self.num_classes - 1):
+            targets[:, k] = (labels_shifted > k).float()
+        loss = F.binary_cross_entropy_with_logits(logits, targets, reduction="mean")
+        return loss
+
+
+def logits_to_rating(logits: torch.Tensor) -> torch.Tensor:
+    return 1.0 + torch.sigmoid(logits).sum(dim=1)
+
+
+def r_drop_consistency_loss(logits1: torch.Tensor, logits2: torch.Tensor) -> torch.Tensor:
+    return F.mse_loss(logits1, logits2)
+
+
 def train_one_fold(
-    model: DeBERTaMeanPoolRegressor,
+    model: DeBERTaLoRAModel,
     train_ds: IndexedDataset,
     val_ds: IndexedDataset,
     fold: int,
     resume_ckpt: Optional[dict] = None,
-) -> Tuple[DeBERTaMeanPoolRegressor, List[float], List[float]]:
-    """Train one fold with R-Drop, CORAL loss, gradient accumulation, cosine LR.
-
-    Supports resuming from checkpoint for HPC job interruption recovery.
-    """
+) -> Tuple[DeBERTaLoRAModel, List[float], List[float]]:
     from transformers import get_cosine_schedule_with_warmup
 
     model = model.to(DEVICE)
@@ -509,7 +399,7 @@ def train_one_fold(
         shuffle=True,
         num_workers=NUM_WORKERS,
         pin_memory=False,
-        persistent_workers=True if NUM_WORKERS > 0 else False,
+        persistent_workers=False,
         drop_last=True,
     )
     val_loader = DataLoader(
@@ -565,8 +455,6 @@ def train_one_fold(
     for epoch in range(start_epoch, N_EPOCHS + 1):
         model.train()
         epoch_loss = 0.0
-        epoch_coral = 0.0
-        epoch_rdrop = 0.0
         n_samples = 0
         optimizer.zero_grad(set_to_none=True)
         t_epoch = time.perf_counter()
@@ -578,16 +466,8 @@ def train_one_fold(
             labels = batch[3].to(DEVICE, non_blocking=True)
 
             with autocast("cuda", enabled=FP16):
-                logits1 = model(
-                    input_ids=input_ids,
-                    attention_mask=attn_mask,
-                    token_type_ids=token_type_ids,
-                )
-                logits2 = model(
-                    input_ids=input_ids,
-                    attention_mask=attn_mask,
-                    token_type_ids=token_type_ids,
-                )
+                logits1 = model(input_ids=input_ids, attention_mask=attn_mask, token_type_ids=token_type_ids)
+                logits2 = model(input_ids=input_ids, attention_mask=attn_mask, token_type_ids=token_type_ids)
 
                 loss1 = coral_loss_fn(logits1, labels)
                 loss2 = coral_loss_fn(logits2, labels)
@@ -599,8 +479,6 @@ def train_one_fold(
             scaler.scale(loss_scaled).backward()
 
             loss_val = loss.item()
-            coral_val = coral.item()
-            rdrop_val = consistency.item()
             n_labels = len(labels)
 
             del logits1, logits2, loss1, loss2, loss, loss_scaled, coral, consistency
@@ -615,8 +493,6 @@ def train_one_fold(
                 scheduler.step()
 
             epoch_loss += loss_val * n_labels
-            epoch_coral += coral_val * n_labels
-            epoch_rdrop += rdrop_val * n_labels
             n_samples += n_labels
 
             if step % 1000 == 0:
@@ -625,19 +501,10 @@ def train_one_fold(
                 samples_per_sec = n_samples / elapsed
                 steps_left = len(train_loader) - step
                 eta = steps_left / (step / elapsed) if step > 0 else 0
-                try:
-                    with open("/proc/self/status") as f:
-                        for line in f:
-                            if line.startswith("VmRSS:"):
-                                rss_mb = int(line.split()[1]) / 1024
-                                break
-                except Exception:
-                    rss_mb = 0
                 print(
                     f"  fold {fold} epoch {epoch} step {step}/{len(train_loader)}: "
-                    f"loss={loss_val:.5f} (coral={coral_val:.5f} rdrop={rdrop_val:.5f}) "
-                    f"lr={current_lr:.2e}  "
-                    f"speed={samples_per_sec:.0f}/s  ETA={eta:.0f}s  RSS={rss_mb:.0f}MB"
+                    f"loss={loss_val:.5f} lr={current_lr:.2e} "
+                    f"speed={samples_per_sec:.0f}/s ETA={eta:.0f}s"
                 )
                 if step % 5000 == 0:
                     gc.collect()
@@ -668,11 +535,7 @@ def train_one_fold(
                 token_type_ids = batch[2].to(DEVICE, non_blocking=True).long()
                 labels = batch[3].to(DEVICE, non_blocking=True)
                 with autocast("cuda", enabled=FP16):
-                    logits = model(
-                        input_ids=input_ids,
-                        attention_mask=attn_mask,
-                        token_type_ids=token_type_ids,
-                    )
+                    logits = model(input_ids=input_ids, attention_mask=attn_mask, token_type_ids=token_type_ids)
                     loss = coral_loss_fn(logits, labels)
                 val_loss_sum += loss.item() * len(labels)
                 val_n += len(labels)
@@ -690,12 +553,11 @@ def train_one_fold(
         val_rmse = np.sqrt(np.mean((val_preds_np - val_labels_np) ** 2))
 
         current_lr = scheduler.get_last_lr()[0]
-
         print(
             f"  fold {fold} epoch {epoch}: "
-            f"train_loss={train_loss:.5f}  val_coral={val_loss:.5f}  "
-            f"val_rmse={val_rmse:.5f}  lr={current_lr:.2e}  "
-            f"train_time={epoch_time:.0f}s  val_time={val_time:.0f}s"
+            f"train_loss={train_loss:.5f} val_coral={val_loss:.5f} "
+            f"val_rmse={val_rmse:.5f} lr={current_lr:.2e} "
+            f"train_time={epoch_time:.0f}s val_time={val_time:.0f}s"
         )
         print_gpu_memory(f"fold {fold} epoch {epoch}")
 
@@ -712,18 +574,10 @@ def train_one_fold(
 
         # Save checkpoint after each epoch for HPC resume
         save_checkpoint(
-            fold=fold,
-            epoch=epoch,
-            model=model,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            scaler=scaler,
-            best_val_rmse=best_val_rmse,
-            patience_counter=patience_counter,
-            train_losses=train_losses,
-            val_losses=val_losses,
-            oof=np.array([]),
-            fold_rmses=[],
+            fold=fold, epoch=epoch, model=model, optimizer=optimizer,
+            scheduler=scheduler, scaler=scaler, best_val_rmse=best_val_rmse,
+            patience_counter=patience_counter, train_losses=train_losses,
+            val_losses=val_losses, oof=np.array([]), fold_rmses=[],
             completed_folds=fold - 1,
         )
 
@@ -740,16 +594,8 @@ def train_one_fold(
 
 
 @torch.no_grad()
-def predict_from_dataset(
-    model: DeBERTaMeanPoolRegressor,
-    ds: IndexedDataset,
-    batch_size: int = BATCH_SIZE * 4,
-) -> np.ndarray:
-    """Generate predictions from an IndexedDataset using CORAL logits → ratings."""
-    loader = DataLoader(
-        ds, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True
-    )
-
+def predict_from_dataset(model, ds, batch_size=BATCH_SIZE * 4):
+    loader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
     model.eval()
     preds = []
     for batch in loader:
@@ -757,32 +603,17 @@ def predict_from_dataset(
         attn_mask = batch[1].to(DEVICE, non_blocking=True).long()
         token_type_ids = batch[2].to(DEVICE, non_blocking=True).long()
         with autocast("cuda", enabled=FP16):
-            logits = model(
-                input_ids=input_ids,
-                attention_mask=attn_mask,
-                token_type_ids=token_type_ids,
-            )
+            logits = model(input_ids=input_ids, attention_mask=attn_mask, token_type_ids=token_type_ids)
         ratings = logits_to_rating(logits)
         preds.append(ratings.cpu().numpy())
-
     return np.concatenate(preds)
 
 
-# ── cross-validation ──────────────────────────────────────────────────
-def run_cv(
-    train_input_ids: torch.Tensor,
-    train_attn_mask: torch.Tensor,
-    train_token_type_ids: torch.Tensor,
-    y: np.ndarray,
-) -> Tuple[np.ndarray, List[DeBERTaMeanPoolRegressor]]:
-    """N-fold CV with checkpoint resume support for HPC.
-
-    Detects completed folds and resumes from latest checkpoint.
-    """
+def run_cv(train_input_ids, train_attn_mask, train_token_type_ids, y):
     n = len(y)
     y_t = torch.from_numpy(y).float()
     oof = np.zeros(n, dtype=np.float32)
-    models: List[DeBERTaMeanPoolRegressor] = []
+    models = []
 
     rng = np.random.RandomState(RANDOM_SEED)
     indices = np.arange(n)
@@ -798,7 +629,6 @@ def run_cv(
     completed_folds = 0
     if resume_ckpt is not None:
         completed_folds = resume_ckpt.get("completed_folds", 0)
-        # Restore OOF predictions from checkpoint
         saved_oof = resume_ckpt.get("oof", None)
         if saved_oof is not None and len(saved_oof) == n:
             oof = saved_oof
@@ -812,10 +642,9 @@ def run_cv(
         # Skip completed folds
         if fold_idx < completed_folds:
             print(f"\n  [CKPT] Skipping fold {fold_idx + 1}/{N_FOLDS} (already completed)")
-            # Try to load saved fold model and OOF
-            fold_model_path = MODEL_DIR / f"deberta_e2e_fold{fold_idx + 1}.pt"
+            fold_model_path = MODEL_DIR / f"deberta_lora_fold{fold_idx + 1}.pt"
             if fold_model_path.exists():
-                model = DeBERTaMeanPoolRegressor(MODEL_NAME, num_tasks=N_TASKS)
+                model = DeBERTaLoRAModel(MODEL_NAME, num_tasks=N_TASKS)
                 model.load_state_dict(torch.load(str(fold_model_path), map_location="cpu", weights_only=True))
                 model = model.to(DEVICE)
                 models.append(model)
@@ -829,21 +658,16 @@ def run_cv(
         val_idx = folds[fold_idx]
         train_idx = np.concatenate([folds[j] for j in range(N_FOLDS) if j != fold_idx])
 
-        train_ds = IndexedDataset(
-            train_input_ids, train_attn_mask, train_token_type_ids, y_t, train_idx
-        )
-        val_ds = IndexedDataset(
-            train_input_ids, train_attn_mask, train_token_type_ids, y_t, val_idx
-        )
+        train_ds = IndexedDataset(train_input_ids, train_attn_mask, train_token_type_ids, y_t, train_idx)
+        val_ds = IndexedDataset(train_input_ids, train_attn_mask, train_token_type_ids, y_t, val_idx)
 
         print(f"  train: {len(train_ds):,}  val: {len(val_ds):,}")
 
-        # Check if we have a checkpoint for this fold
         fold_ckpt = None
         if resume_ckpt is not None and resume_ckpt.get("fold") == fold_idx + 1:
             fold_ckpt = resume_ckpt
 
-        model = DeBERTaMeanPoolRegressor(MODEL_NAME, num_tasks=N_TASKS)
+        model = DeBERTaLoRAModel(MODEL_NAME, num_tasks=N_TASKS)
         model, _, _ = train_one_fold(model, train_ds, val_ds, fold_idx + 1, resume_ckpt=fold_ckpt)
 
         val_pred = predict_from_dataset(model, val_ds)
@@ -855,10 +679,7 @@ def run_cv(
         fold_rmses.append(fold_rmse)
         print(f"  fold {fold_idx + 1} RMSE: {fold_rmse:.5f}")
 
-        # Save fold model
         save_fold_model(fold_idx + 1, model, fold_rmse)
-
-        # Save intermediate OOF with fold progress
         _save_oof_checkpoint(oof, fold_rmses, fold_idx + 1)
         print(f"  Intermediate OOF saved ({fold_idx + 1}/{N_FOLDS} folds)")
 
@@ -875,24 +696,7 @@ def run_cv(
     return oof, models
 
 
-def _save_oof_checkpoint(oof: np.ndarray, fold_rmses: List[float], completed_folds: int) -> None:
-    """Save OOF state for crash recovery."""
-    state = {
-        "oof": oof,
-        "fold_rmses": fold_rmses,
-        "completed_folds": completed_folds,
-    }
-    path = CHECKPOINT_DIR / "oof_state.pt"
-    torch.save(state, str(path))
-
-
-def predict_test(
-    models: List[DeBERTaMeanPoolRegressor],
-    test_input_ids: torch.Tensor,
-    test_attn_mask: torch.Tensor,
-    test_token_type_ids: torch.Tensor,
-) -> np.ndarray:
-    """Average test predictions across fold models."""
+def predict_test(models, test_input_ids, test_attn_mask, test_token_type_ids):
     test_ds = IndexedDataset(test_input_ids, test_attn_mask, test_token_type_ids)
     preds = []
     for i, m in enumerate(models):
@@ -902,21 +706,21 @@ def predict_test(
     return np.mean(preds, axis=0)
 
 
-# ── main ──────────────────────────────────────────────────────────────
-def main() -> None:
+def main():
     t_start = time.perf_counter()
     print("=" * 70)
-    print("DeBERTa-v3-base E2E Fine-tuning (Mean Pooling + R-Drop + CORAL)")
+    print("DeBERTa-v3-base LoRA Fine-tuning (Mean Pooling + R-Drop + CORAL)")
     print("=" * 70)
-    print(f"[DUAL-TRACK] Track A: Full fine-tuning (Track B: deberta_lora.py)")
-    print(f"Model: {MODEL_NAME} (86M params)")
+    print(f"[DUAL-TRACK] Track B: LoRA (Track A: transformer_e2e.py)")
+    print(f"Model: {MODEL_NAME} (86M params, LoRA r={LORA_R})")
+    print(f"LoRA target: {LORA_TARGET_MODULES}")
     print(f"Max length: {MAX_LENGTH}")
     print(f"Batch: {BATCH_SIZE}, GradAcc: {GRAD_ACCUM_STEPS} (eff BS={BATCH_SIZE * GRAD_ACCUM_STEPS})")
     print(f"LR: {LR}, Weight decay: {WEIGHT_DECAY}")
     print(f"Epochs: {N_EPOCHS}, Patience: {PATIENCE}")
     print(f"Folds: {N_FOLDS}")
     print(f"R-Drop alpha: {R_DROP_ALPHA}")
-    print(f"CORAL classes: {N_CLASSES} → {N_TASKS} binary tasks")
+    print(f"CORAL classes: {N_CLASSES} -> {N_TASKS} binary tasks")
     print(f"FP16: {FP16}")
     print(f"Device: {DEVICE}")
     print(f"Checkpoint dir: {CHECKPOINT_DIR}")
@@ -940,7 +744,6 @@ def main() -> None:
 
     print("[1/5] Loading tokenizer ...")
     from transformers import AutoTokenizer
-
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     print(f"  Tokenizer: {tokenizer.__class__.__name__}")
 
@@ -965,7 +768,7 @@ def main() -> None:
     del tokenizer
     gc.collect()
 
-    print(f"\n[4/5] {N_FOLDS}-fold CV training (with checkpoint resume) ...")
+    print(f"\n[4/5] {N_FOLDS}-fold CV LoRA training (with checkpoint resume) ...")
     t0 = time.perf_counter()
     oof_preds, fold_models = run_cv(
         train_input_ids, train_attn_mask, train_token_type_ids, y_train
@@ -976,7 +779,7 @@ def main() -> None:
     oof_rmse = np.sqrt(np.mean((oof_preds - y_train) ** 2))
     oof_std = np.std(oof_preds)
     print(f"  OOF RMSE: {oof_rmse:.5f}")
-    print(f"  OOF pred std: {oof_std:.5f} (actual std: {y_train.std():.3f})")
+    print(f"  OOF pred std: {oof_std:.5f}")
 
     print("\n[5/5] Generating test predictions and saving ...")
     t0 = time.perf_counter()
@@ -985,14 +788,13 @@ def main() -> None:
     print(f"  Test predictions in {test_time:.1f}s")
 
     np.save(str(OOF_PATH), oof_preds)
-    print(f"  OOF saved -> {OOF_PATH}  shape={oof_preds.shape}")
+    print(f"  OOF saved -> {OOF_PATH}")
     np.save(str(TEST_PRED_PATH), test_preds)
-    print(f"  Test preds saved -> {TEST_PRED_PATH}  shape={test_preds.shape}")
+    print(f"  Test preds saved -> {TEST_PRED_PATH}")
 
     total_time = time.perf_counter() - t_start
     print(f"\n  Total time: {total_time:.1f}s ({total_time / 3600:.1f}h)")
     print(f"  OOF RMSE: {oof_rmse:.5f}")
-    print(f"  OOF pred std: {oof_std:.5f}")
 
     save_evidence(oof_rmse, oof_std, fold_models, cv_time, total_time)
     write_changelog(oof_rmse, oof_std, cv_time, total_time)
@@ -1003,101 +805,69 @@ def main() -> None:
     print("\n=== Done ===")
 
 
-def _cleanup_all_checkpoints() -> None:
-    """Clean up all checkpoints after successful completion."""
-    for f in CHECKPOINT_DIR.glob("fold*_epoch*.pt"):
-        f.unlink(missing_ok=True)
-    for f in CHECKPOINT_DIR.glob("*.txt"):
-        f.unlink(missing_ok=True)
-    oof_ckpt = CHECKPOINT_DIR / "oof_state.pt"
-    if oof_ckpt.exists():
-        oof_ckpt.unlink()
-    print("  [CKPT] All checkpoints cleaned up after successful completion")
-
-
-def save_evidence(
-    oof_rmse: float,
-    oof_std: float,
-    fold_models: List[DeBERTaMeanPoolRegressor],
-    cv_time: float,
-    total_time: float,
-) -> None:
-    """Save evidence file for Task 6."""
+def save_evidence(oof_rmse, oof_std, fold_models, cv_time, total_time):
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     lines = [
-        "Task 6: DeBERTa E2E Fine-tuning (Mean Pooling + R-Drop + CORAL)",
+        "Task LoRA: DeBERTa-v3-base LoRA Fine-tuning (Mean Pooling + R-Drop + CORAL)",
         "=" * 60,
         "",
-        f"Model: {MODEL_NAME} (86M params)",
+        "[DUAL-TRACK] Track B: LoRA (Track A: transformer_e2e.py)",
+        "",
+        f"Model: {MODEL_NAME} (86M params, LoRA r={LORA_R}, alpha={LORA_ALPHA})",
+        f"LoRA target modules: {LORA_TARGET_MODULES}",
+        f"Trainable params: ~0.5-3M (vs 86M full)",
+        "",
         f"OOF RMSE: {oof_rmse:.5f}",
         f"OOF pred std: {oof_std:.5f}",
         f"CV time: {cv_time:.1f}s ({cv_time / 3600:.1f}h)",
         f"Total time: {total_time:.1f}s ({total_time / 3600:.1f}h)",
         "",
-        "Fixes applied:",
-        "  1. Mean Pooling (not [CLS])",
-        "  2. CORAL Ordinal Loss (not MSE)",
-        "  3. R-Drop regularization (alpha=0.5)",
-        "  4. lr=3e-5 (was 2e-5)",
-        "  5. 5 epochs, patience=3 (was 3/2)",
-        "  6. BS=16 + GradAcc=16 (was BS=64)",
-        "  7. deberta-v3-base 86M (was small 44M)",
-        "  + Cosine scheduler (was linear)",
-        "",
-        f"Training config:",
+        "Training config:",
+        f"  LoRA rank: {LORA_R}",
+        f"  LoRA alpha: {LORA_ALPHA}",
+        f"  LoRA dropout: {LORA_DROPOUT}",
         f"  Batch size: {BATCH_SIZE}",
         f"  Grad accum steps: {GRAD_ACCUM_STEPS}",
         f"  Effective batch size: {BATCH_SIZE * GRAD_ACCUM_STEPS}",
         f"  Learning rate: {LR}",
         f"  Max epochs: {N_EPOCHS}",
+        f"  Folds: {N_FOLDS}",
         f"  Patience: {PATIENCE}",
         f"  Sequence length: {MAX_LENGTH}",
         f"  FP16: {FP16}",
         f"  R-Drop alpha: {R_DROP_ALPHA}",
-        f"  CORAL classes: {N_CLASSES}",
         "",
-        f"Output files:",
-        f"  OOF: {OOF_PATH}",
-        f"  Test: {TEST_PRED_PATH}",
-        "",
-        f"Status: {'PASS - OOF RMSE < 1.05' if oof_rmse < 1.05 else 'FAIL - OOF RMSE >= 1.05'}",
+        f"Status: {'PASS - OOF RMSE < 1.05' if oof_rmse < 1.05 else 'NEEDS COMPARISON with Track A'}",
     ]
     EVIDENCE_PATH.write_text("\n".join(lines) + "\n")
     print(f"  Evidence -> {EVIDENCE_PATH}")
 
 
-def write_changelog(
-    oof_rmse: float,
-    oof_std: float,
-    cv_time: float,
-    total_time: float,
-) -> None:
-    """Write training changelog."""
+def write_changelog(oof_rmse, oof_std, cv_time, total_time):
     CHANGELOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "# DeBERTa-v3-base E2E Fine-tuning",
+        "# DeBERTa-v3-base LoRA Fine-tuning",
+        "",
+        "## Dual-Track Approach",
+        "- **Track A**: Full fine-tuning (transformer_e2e.py) — 4 folds × 4 epochs",
+        "- **Track B**: LoRA fine-tuning (deberta_lora.py) — 5 folds × 5 epochs",
+        "- Both tracks run in parallel to compare within 36h budget",
         "",
         "## Architecture",
-        f"- **Model**: {MODEL_NAME} (86M params)",
+        f"- **Model**: {MODEL_NAME} (86M params, LoRA r={LORA_R})",
+        f"- **LoRA modules**: {LORA_TARGET_MODULES}",
         "- **Head**: Mean Pooling -> Dropout(0.1) -> Linear(768, 4) [CORAL]",
-        "- **Loss**: CORAL ordinal (4 binary cumulative tasks) + R-Drop consistency",
         "- **Prediction**: 1 + sigmoid(logits).sum() -> continuous [1, 5]",
-        "- **Input**: title + comment concatenated",
-        f"- **Max sequence length**: {MAX_LENGTH}",
         "",
-        "## Fixes Applied (from task-1 diagnosis)",
-        "1. **Mean Pooling** (was [CLS]): Average all token embeddings, not just [CLS]",
-        "2. **CORAL Loss** (was MSE): 4 binary cumulative tasks for ordinal regression",
-        "3. **R-Drop** (was none): Two forward passes, MSE consistency loss (alpha=0.5)",
-        "4. **lr=3e-5** (was 2e-5): Higher LR works with R-Drop regularization",
-        "5. **5 epochs, patience=3** (was 3/2): More training with R-Drop protection",
-        "6. **BS=16 + GradAcc=16** (was BS=64): Effective BS=256, smaller batches for generalization",
-        "7. **deberta-v3-base** (was small): 86M vs 44M params for 3M samples",
-        "8. **Cosine scheduler** (was linear): Better fine-tuning convergence",
+        "## LoRA Config",
+        f"- Rank: {LORA_R}",
+        f"- Alpha: {LORA_ALPHA}",
+        f"- Dropout: {LORA_DROPOUT}",
+        f"- Target: {LORA_TARGET_MODULES}",
         "",
         "## Hyperparameters",
         f"- Folds: {N_FOLDS}",
-        f"- Epochs per fold: {N_EPOCHS} (early stopping patience={PATIENCE})",
+        f"- Epochs: {N_EPOCHS} (patience={PATIENCE})",
         f"- Batch size: {BATCH_SIZE}",
         f"- Gradient accumulation: {GRAD_ACCUM_STEPS} (effective BS={BATCH_SIZE * GRAD_ACCUM_STEPS})",
         f"- Learning rate: {LR}",
@@ -1105,8 +875,6 @@ def write_changelog(
         f"- Warmup ratio: {WARMUP_RATIO}",
         f"- R-Drop alpha: {R_DROP_ALPHA}",
         f"- FP16: {FP16}",
-        f"- Random seed: {RANDOM_SEED}",
-        f"- Device: {DEVICE}",
         "",
         "## Results",
         f"- **OOF RMSE: {oof_rmse:.5f}**",
@@ -1114,25 +882,9 @@ def write_changelog(
         f"- CV time: {cv_time:.1f}s ({cv_time / 3600:.1f}h)",
         f"- Total time: {total_time:.1f}s ({total_time / 3600:.1f}h)",
         "",
-        "## Data",
-        "- Training samples: 3,007,439",
-        "- Test samples: 10,000",
-        "- Features: Raw text (title + comment)",
-        "- Pre-tokenized: Yes (cached, seq_len=128)",
-        "",
         "## Outputs",
-        f"- OOF predictions: `artifacts/models/deberta_e2e_oof.npy` (3,007,439,)",
-        f"- Test predictions: `artifacts/models/deberta_e2e_test.npy` (10,000,)",
-        "",
-        "## Notes",
-        "- Fine-tunes entire transformer (no frozen layers)",
-        "- Gradient checkpointing enabled for memory efficiency",
-        "- Mixed precision (FP16) for speed",
-        "- deberta-v3-base uses same tokenizer as deberta-v3-small (tokens compatible)",
-        "- IndexedDataset avoids tensor copies for fold splits",
-        "- Predictions clipped to [1.0, 5.0]",
-        "- Same fold split as MLP for stacking compatibility",
-        "- Intermediate OOF saved after each fold (crash recovery)",
+        f"- OOF: `artifacts/models/deberta_lora_oof.npy`",
+        f"- Test: `artifacts/models/deberta_lora_test.npy`",
     ]
     CHANGELOG_PATH.write_text("\n".join(lines) + "\n")
     print(f"  Changelog -> {CHANGELOG_PATH}")

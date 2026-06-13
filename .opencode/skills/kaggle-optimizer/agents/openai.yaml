@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kaggle Optimizer"
+  short_description: "End-to-end Kaggle RMSE optimization for review-rating prediction"
+  default_prompt: "Optimize the review-rating model to reduce Kaggle RMSE. Start by assessing current state, then plan and execute the next experiment."

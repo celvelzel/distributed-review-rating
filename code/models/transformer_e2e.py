@@ -1,40 +1,42 @@
 #!/usr/bin/env python
-"""DeBERTa-v3-base E2E fine-tuning with Mean Pooling + R-Drop + CORAL.
+"""DeBERTa-v3-base E2E fine-tuning with Mean Pooling + CORAL.
 
 === DUAL-TRACK APPROACH ===
-This script is Track A: Full fine-tuning with Option C parameters.
+This script is Track A: Full fine-tuning (OPTIMIZED for 36h HPC budget).
 Track B: LoRA fine-tuning (see deberta_lora.py) — faster, less memory.
 We run both in parallel to compare results within the 36h budget.
 
-Implements ALL 7 fixes from task-1 diagnosis:
+OPTIMIZATION (from 110h to ~23h):
+    - Removed R-Drop (2x forward pass → 1x): ~1.8x speedup
+    - Reduced folds: 4 → 2: ~2x speedup
+    - Reduced epochs: 4 → 3: ~1.3x speedup
+    - Total: ~4.7x speedup → 110h / 4.7 ≈ 23h
+
+Implements fixes from task-1 diagnosis:
     1. Mean Pooling (NOT [CLS]) — averages all token embeddings
     2. CORAL Ordinal Loss (NOT MSE) — 4 binary cumulative tasks
-    3. R-Drop regularization — two forward passes, KL consistency
+    3. R-Drop DISABLED (alpha=0) — too slow for 36h budget
     4. lr=3e-5 (was 2e-5)
-    5. 4 epochs, patience=3 (Option C: reduced from 5 for 36h budget)
+    5. 3 epochs, patience=3
     6. BS=12 + GradAcc=21 = effective BS=252 (was BS=64)
     7. deberta-v3-base 86M params (was deberta-v3-small 44M)
     + Cosine LR scheduler (was linear)
-
-Option C Parameters (36h budget on RTX 3080 Ti):
-    4 folds × 4 epochs = ~10.4h pure training
-    Estimated wall clock: ~20h (with GPU contention)
 
 Architecture:
     deberta-v3-base → Mean Pooling → Dropout(0.1) → Linear(768, 4)
     Prediction: 1 + sigmoid(logits).sum(dim=1) → continuous [1, 5]
 
 Training:
-    Loss: CORAL ordinal (4 binary cumulative) + R-Drop MSE consistency
+    Loss: CORAL ordinal (4 binary cumulative)
     Optimizer: AdamW (lr=3e-5, weight_decay=0.01)
     Scheduler: Cosine with linear warmup (10%)
     Batch: 12, GradAcc: 21 (effective BS=252)
-    Epochs: 4, Early stopping patience=3
-    Mixed precision: FP16, Gradient checkpointing
+    Epochs: 3, Early stopping patience=3
+    Mixed precision: FP16
 
 Strategy:
     Input: title + comment concatenated, pre-tokenized (SeqLen=128)
-    4-fold OOF validation (Option C: reduced from 5 for time budget)
+    2-fold OOF validation (reduced from 4 for time budget)
     IndexedDataset avoids tensor copies (memory-efficient)
     Fold models predict test set → averaged
 
@@ -88,17 +90,20 @@ CHANGELOG_PATH = ROOT / "docs" / "changelog" / "deberta-e2e-training.md"
 MODEL_NAME = "microsoft/deberta-v3-base"  # 86M params (was: small 44M)
 MAX_LENGTH = 128  # Use pre-cached tokens (same tokenizer for base/small)
 
-# ── Training config (FIXES #4, #5, #6) ────────────────────────────────
+# ── Training config (OPTIMIZED for 36h HPC budget) ───────────────────
+# Original: 4f × 4e with R-Drop = ~110h (too slow)
+# Optimized: 2f × 3e without R-Drop = ~23h (fits 36h)
+# Key changes: removed R-Drop (2x forward pass), fewer folds/epochs
 RANDOM_SEED = 42
-N_FOLDS = 4               # Option C: 4 folds (was 5) for 36h budget
-N_EPOCHS = 4              # Option C: 4 epochs (was 5) for 36h budget
+N_FOLDS = 2               # Reduced from 4 (saves 2x time)
+N_EPOCHS = 3              # Reduced from 4 (saves 1.3x time)
 PATIENCE = 3
 BATCH_SIZE = 12           # FIX #6: was 64 (reduced from 16 for RAM OOM safety)
 GRAD_ACCUM_STEPS = 21     # FIX #6: effective BS = 12 × 21 = 252 ≈ 256
 LR = 3e-5                 # FIX #4: was 2e-5
 WEIGHT_DECAY = 0.01
 WARMUP_RATIO = 0.1
-R_DROP_ALPHA = 0.5        # FIX #3: R-Drop consistency loss weight
+R_DROP_ALPHA = 0.0        # DISABLED: R-Drop causes 2x forward pass, too slow for 36h budget
 FP16 = True
 NUM_WORKERS = 0  # Must be 0: worker processes fork+copy 4.6GB tensors → OOM
 
@@ -583,17 +588,25 @@ def train_one_fold(
                     attention_mask=attn_mask,
                     token_type_ids=token_type_ids,
                 )
-                logits2 = model(
-                    input_ids=input_ids,
-                    attention_mask=attn_mask,
-                    token_type_ids=token_type_ids,
-                )
 
                 loss1 = coral_loss_fn(logits1, labels)
-                loss2 = coral_loss_fn(logits2, labels)
-                coral = (loss1 + loss2) / 2.0
-                consistency = r_drop_consistency_loss(logits1, logits2)
-                loss = coral + R_DROP_ALPHA * consistency
+
+                if R_DROP_ALPHA > 0:
+                    # R-Drop: second forward pass for consistency loss
+                    logits2 = model(
+                        input_ids=input_ids,
+                        attention_mask=attn_mask,
+                        token_type_ids=token_type_ids,
+                    )
+                    loss2 = coral_loss_fn(logits2, labels)
+                    coral = (loss1 + loss2) / 2.0
+                    consistency = r_drop_consistency_loss(logits1, logits2)
+                    loss = coral + R_DROP_ALPHA * consistency
+                else:
+                    # No R-Drop: single forward pass (2x faster)
+                    coral = loss1
+                    consistency = torch.tensor(0.0)
+                    loss = loss1
 
             loss_scaled = loss / GRAD_ACCUM_STEPS
             scaler.scale(loss_scaled).backward()
@@ -603,7 +616,11 @@ def train_one_fold(
             rdrop_val = consistency.item()
             n_labels = len(labels)
 
-            del logits1, logits2, loss1, loss2, loss, loss_scaled, coral, consistency
+            del loss, loss_scaled, coral, consistency
+            if R_DROP_ALPHA > 0:
+                del logits2, loss1, loss2
+            else:
+                del logits1, loss1
             del input_ids, attn_mask, token_type_ids, labels
 
             if step % GRAD_ACCUM_STEPS == 0:

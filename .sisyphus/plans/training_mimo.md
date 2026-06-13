@@ -12,7 +12,7 @@
 
 | Track | 脚本 | 策略 | Folds × Epochs | 预估时间 |
 |-------|------|------|----------------|---------|
-| **A: 全参数微调** | `code/models/transformer_e2e.py` | Option C | 4f × 4e | ~10.4h |
+| **A: 全参数微调** | `code/models/transformer_e2e.py` | 优化版 (无 R-Drop) | 2f × 3e | ~23h |
 | **B: LoRA 微调** | `code/models/deberta_lora.py` | LoRA r=16 | 5f × 5e | ~10h |
 
 ---
@@ -39,27 +39,26 @@
 |------|------|------|
 | Model | microsoft/deberta-v3-base | 86M params |
 | Pooling | Mean Pooling | 非 [CLS] |
-| Loss | CORAL Ordinal + R-Drop (α=0.5) | 4 binary cumulative tasks |
+| Loss | CORAL Ordinal | 4 binary cumulative tasks |
+| R-Drop | DISABLED (α=0) | 移除以加速 (原来 110h → 23h) |
 | Batch Size | 12 | 显存安全 |
 | Grad Accum | 21 | effective BS=252 |
 | LR | 3e-5 | R-Drop 推荐 |
 | Scheduler | Cosine (10% warmup) | |
-| Epochs | 4 | Option C |
+| Epochs | 3 | 优化后 |
 | Patience | 3 | |
-| Folds | 4 | Option C |
+| Folds | 2 | 优化后 |
 | Max Length | 128 | 预缓存 token |
 | FP16 | True | |
 | Gradient Checkpointing | DISABLED | 显存够用 |
 
-### 预估时间
+### 优化说明
 
-| 阶段 | 时间 |
-|------|------|
-| 数据加载 + tokenization | ~5min (有缓存) |
-| Fold 1 (4 epochs) | ~2.6h |
-| Fold 2-4 | ~7.8h |
-| Test prediction | ~10min |
-| **总计** | **~10.4h** |
+原配置 (4f × 4e + R-Drop) 需要 ~110h，优化后 (~23h):
+- 移除 R-Drop: ~1.8x 加速 (不需要两次前向传播)
+- 减少 folds: 4 → 2: ~2x 加速
+- 减少 epochs: 4 → 3: ~1.3x 加速
+- 总加速: ~4.7x
 
 ### Checkpoint 行为
 

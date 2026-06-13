@@ -389,18 +389,18 @@
             <span>TF-IDF + 正则化 LightGBM，Kaggle=0.790 — 已完成</span>
           </div>
         </div>
+        <div class="roadmap-item completed">
+          <div class="roadmap-status">✓</div>
+          <div class="roadmap-text">
+            <strong>T25: 高级模型探索</strong>
+            <span>字符级 TF-IDF + XGBoost + SentenceTransformer — 已完成</span>
+          </div>
+        </div>
         <div class="roadmap-item active">
           <div class="roadmap-status">⚡</div>
           <div class="roadmap-text">
-            <strong>T25: 高级模型探索</strong>
-            <span>字符级 TF-IDF + XGBoost + SentenceTransformer — 进行中</span>
-          </div>
-        </div>
-        <div class="roadmap-item future">
-          <div class="roadmap-status">○</div>
-          <div class="roadmap-text">
-            <strong>T26: Transformer 微调</strong>
-            <span>微调 DeBERTa-v3-large 直接预测评分 — 待开始</span>
+            <strong>T26: DeBERTa-v3-base LoRA 微调</strong>
+            <span>LoRA r=16, 5f×5e, CORAL+R-Drop — 训练中 (Fold 1/5, Epoch 1)</span>
           </div>
         </div>
       </div>
@@ -542,6 +542,42 @@
       </div>
     </div>
 
+    <!-- 3b. DeBERTa Training Status -->
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">🔥</span>
+        <span>DeBERTa-v3-base LoRA 训练状态</span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">当前进度</div>
+          <div class="metric-value" style="font-size: 20px;">Fold 1/5</div>
+          <div class="metric-status">Epoch 1 训练中</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">训练速度</div>
+          <div class="metric-value">121/s</div>
+          <div class="metric-status">RTX 3080 Ti</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">VRAM 使用</div>
+          <div class="metric-value">4.9GB</div>
+          <div class="metric-status">/ 12GB 总量</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">预估完成</div>
+          <div class="metric-value" style="font-size: 18px;">~55h</div>
+          <div class="metric-status">需 checkpoint resume</div>
+        </div>
+      </div>
+      <div style="margin-top: 16px; font-size: 14px; color: var(--text-muted);">
+        <p><strong>配置:</strong> LoRA r=16 α=32, target=query_proj/value_proj, 589K trainable params (0.32%)</p>
+        <p><strong>训练:</strong> BS=16, GradAcc=16 (eff BS=256), LR=3e-5, CORAL+R-Drop(α=0.5)</p>
+        <p><strong>策略:</strong> 5-fold CV × 5 epochs, early stopping patience=3</p>
+        <p><strong>注意:</strong> Track A (全参数微调) 已跳过 — 速度太慢 (~110h), 仅运行 Track B (LoRA)</p>
+      </div>
+    </div>
+
     <!-- 4. Risks & Limitations -->
     <div class="card">
       <div class="card-title">
@@ -665,7 +701,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-12</span></p>
+    <p>最后更新：<span class="timestamp" id="lastUpdate">2026-06-13</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

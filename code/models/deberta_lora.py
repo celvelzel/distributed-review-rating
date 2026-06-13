@@ -97,7 +97,7 @@ N_TASKS = N_CLASSES - 1
 LORA_R = 16
 LORA_ALPHA = 32
 LORA_DROPOUT = 0.05
-LORA_TARGET_MODULES = ["query", "value"]
+LORA_TARGET_MODULES = ["query_proj", "value_proj"]
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 N_GPU = torch.cuda.device_count() if torch.cuda.is_available() else 0
@@ -145,7 +145,7 @@ class IndexedDataset(Dataset):
 def load_and_tokenize(path, tokenizer, max_length, cache_path=None):
     if cache_path and cache_path.exists():
         print(f"  Loading cached tokens from {cache_path.name}")
-        data = np.load(str(cache_path))
+        data = np.load(str(cache_path), allow_pickle=True)
         input_ids = torch.from_numpy(data["input_ids"]).to(torch.int32)
         attention_mask = torch.from_numpy(data["attention_mask"]).to(torch.int32)
         token_type_ids = torch.from_numpy(data["token_type_ids"]).to(torch.int32)

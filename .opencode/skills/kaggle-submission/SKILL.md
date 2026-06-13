@@ -1,6 +1,47 @@
+---
+name: kaggle-submission
+description: >
+  Submit prediction results to the COMP5434 Kaggle competition.
+  Use when: (1) generating prediction files in output/, (2) model training is complete
+  and needs to submit results, (3) uploading a submission CSV to Kaggle.
+  NOT for: model training, feature engineering, or optimization.
+---
+
 # Kaggle Submission Skill
 
 Submit prediction results to the COMP5434 Kaggle competition.
+
+## Prerequisites
+
+### 1. Install Kaggle CLI
+
+```bash
+pip install kaggle
+```
+
+### 2. Configure API Token
+
+The token `KGAT_95032a984dab4b2545f71383d9913c63` is pre-saved at `~/.kaggle/access_token`. If not present, create it:
+
+```bash
+mkdir -p ~/.kaggle
+echo KGAT_95032a984dab4b2545f71383d9913c63 > ~/.kaggle/access_token
+chmod 600 ~/.kaggle/access_token
+```
+
+Alternatively, set the environment variable before each command:
+
+```bash
+export KAGGLE_API_TOKEN=KGAT_95032a984dab4b2545f71383d9913c63
+```
+
+### 3. Verify Access
+
+```bash
+kaggle competitions submissions -c comp-5434-2526-sem-3-project --csv
+```
+
+If this returns a table of submissions, the setup is correct.
 
 ## When to Use
 

@@ -13,12 +13,43 @@ description: >
 
 Optimize the COMP5434 review-rating prediction system to minimize Kaggle RMSE.
 
+## Prerequisites
+
+### 1. Install Kaggle CLI
+
+```bash
+pip install kaggle
+```
+
+### 2. Configure API Token
+
+The token `KGAT_95032a984dab4b2545f71383d9913c63` is pre-saved at `~/.kaggle/access_token`. If not present, create it:
+
+```bash
+mkdir -p ~/.kaggle
+echo KGAT_95032a984dab4b2545f71383d9913c63 > ~/.kaggle/access_token
+chmod 600 ~/.kaggle/access_token
+```
+
+Alternatively, set the environment variable before each command:
+
+```bash
+export KAGGLE_API_TOKEN=KGAT_95032a984dab4b2545f71383d9913c63
+```
+
+### 3. Verify Access
+
+```bash
+kaggle competitions submissions -c comp-5434-2526-sem-3-project --csv
+```
+
+If this returns a table of submissions, the setup is correct.
+
 ## Competition
 
-- Competition: `comp-5434-2526-sem-3-project`
+- Competition slug: `comp-5434-2526-sem-3-project`
 - Metric: RMSE (lower is better)
-- Submission format: CSV with `id` (int) and `rating` (float)
-- API token: set via `KAGGLE_API_TOKEN` env var
+- Submission format: CSV with exactly 2 columns: `id` (int) and `rating` (float, range 1.0-5.0)
 
 ## Core Loop
 
@@ -33,7 +64,10 @@ ASSESS -> PLAN -> IMPLEMENT -> VALIDATE -> SUBMIT -> RECORD
 1. Read `docs/progress/kaggle-optimization-progress.md` for latest history
 2. Read `.omo/plans/kaggle-optimization-v2.md` for planned work
 3. Check artifacts in `artifacts/features/` and `artifacts/models/`
-4. Review submissions: `kaggle competitions submissions -c comp-5434-2526-sem-3-project`
+4. Review submissions:
+   ```bash
+   kaggle competitions submissions -c comp-5434-2526-sem-3-project --csv
+   ```
 5. Identify: what features exist, what models are trained, current best RMSE
 
 ### Step 2: PLAN -- Design Experiment
@@ -68,16 +102,23 @@ Document: hypothesis, what changes, expected impact.
 
 ### Step 5: SUBMIT -- Upload to Kaggle
 
-```bash
-export KAGGLE_API_TOKEN=KGAT_95032a984dab4b2545f71383d9913c63
-kaggle competitions submit -c comp-5434-2526-sem-3-project -f <submission.csv> -m "<description>"
-```
-
-Retrieve score:
+Upload your submission CSV to the competition:
 
 ```bash
-kaggle competitions submissions -c comp-5434-2526-sem-3-project --csv | head -3
+kaggle competitions submit -c comp-5434-2526-sem-3-project -f output/<your_submission>.csv -m "description of changes"
 ```
+
+- `-c comp-5434-2526-sem-3-project` — competition slug (required)
+- `-f output/<your_submission>.csv` — path to your CSV file (required)
+- `-m "..."` — commit message describing the experiment (required)
+
+Check your submission score:
+
+```bash
+kaggle competitions submissions -c comp-5434-2526-sem-3-project --csv
+```
+
+The top row is your latest submission. The `publicScore` column shows the RMSE.
 
 ### Step 6: RECORD -- Document Results
 

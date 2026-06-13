@@ -69,7 +69,7 @@ Detailed types with detection methods:
 
 ## Checkpoint Resume Protocol
 
-For HPC jobs with ~30h limit:
+For HPC jobs with 30-36h limit:
 
 ```python
 import glob, os

@@ -108,28 +108,19 @@ Create or append to `docs/changelog/YYYY-MM-DD-<topic>.md`:
 Every training script MUST implement checkpoint saving:
 
 ```python
-# Generic checkpoint pattern (adapt to your framework)
-import json, os
-
-checkpoint = {
-    "epoch": current_epoch,
-    "fold": current_fold,
-    "model_state": model.state_dict(),      # PyTorch
-    # "model": model.get_params(),           # sklearn
-    # "model": model.save_model(),           # LightGBM/CatBoost/XGBoost
-    "optimizer_state": optimizer.state_dict(),
-    "best_metric": best_rmse,
-    "config": experiment_config,
-}
-path = f"artifacts/checkpoints/{model_name}_f{current_fold}_e{current_epoch}.json"
-os.makedirs(os.path.dirname(path), exist_ok=True)
-torch.save(checkpoint, path)  # or json.dump / joblib.dump
-
-# Resume: load latest checkpoint and continue
+# Save checkpoint after each epoch/fold
+checkpoint_path = f"artifacts/checkpoints/{model_name}_fold{fold}_epoch{epoch}.pt"
+torch.save({
+    'epoch': epoch,
+    'fold': fold,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'val_rmse': val_rmse,
+}, checkpoint_path)
 ```
 
 - Checkpoint dir: `artifacts/checkpoints/`
-- HPC jobs are limited to ~30 hours. Training MUST support resume from checkpoint.
+- HPC jobs are limited to 30-36 hours. Training MUST support resume from checkpoint.
 - On restart, load latest checkpoint and continue training from that point.
 - Always save: model weights, optimizer state, current epoch/fold, best metric.
 
@@ -185,7 +176,7 @@ Before EVERY experiment:
 ## Environment
 
 - Hardware: RTX 3080 Ti (12GB VRAM) -- GPU OOM is a constraint for large models
-- HPC job limit: ~30 hours per job -- code MUST support checkpoint/resume
+- HPC job limit: 30-36 hours per job -- code MUST support checkpoint/resume
 - PySpark available for distributed processing
 
 ## Detailed ML Guidelines

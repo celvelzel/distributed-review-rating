@@ -21,20 +21,18 @@ Optimize the COMP5434 review-rating prediction system to minimize Kaggle RMSE.
 pip install kaggle
 ```
 
-### 2. Configure API Token
+### 2. Authenticate
 
-The token `KGAT_95032a984dab4b2545f71383d9913c63` is pre-saved at `~/.kaggle/access_token`. If not present, create it:
+Run the auth script — it tries 3 tokens from `config/kaggle_tokens.json` and saves the working one:
 
 ```bash
-mkdir -p ~/.kaggle
-echo KGAT_95032a984dab4b2545f71383d9913c63 > ~/.kaggle/access_token
-chmod 600 ~/.kaggle/access_token
+bash scripts/kaggle_auth.sh
 ```
 
-Alternatively, set the environment variable before each command:
+If the script is unavailable, set the token manually:
 
 ```bash
-export KAGGLE_API_TOKEN=KGAT_95032a984dab4b2545f71383d9913c63
+export KAGGLE_API_TOKEN=<one of your tokens>
 ```
 
 ### 3. Verify Access

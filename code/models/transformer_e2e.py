@@ -256,16 +256,13 @@ def load_and_tokenize(
 
 # ── FIX #1: Mean Pooling Model (NOT [CLS]) ───────────────────────────
 class DeBERTaMeanPoolRegressor(nn.Module):
-    """DeBERTa-v3-base with mean pooling for ordinal regression.
+    """DeBERTa-v3-base with mean pooling for CORAL ordinal regression.
 
     FIX #1: Mean pooling instead of [CLS] token pooling.
-        - Averages all non-padded token embeddings
-        - More robust for regression tasks (3-8% improvement)
-        - DeBERTa [CLS] not trained with NSP, less informative
-
-    FIX #2: Outputs K-1=4 logits for CORAL ordinal loss.
-        - Each logit predicts P(rating > k) for k in {1,2,3,4}
-        - Final prediction: 1 + sigmoid(logits).sum() ∈ [1, 5]
+    FIX #2: True CORAL — shared weight + task-specific biases.
+        Original CORAL paper (Cao et al. 2020) enforces rank consistency
+        by sharing the weight vector across all K-1 binary tasks.
+        Only the bias differs per threshold.
     """
 
     def __init__(self, model_name: str, num_tasks: int = N_TASKS, dropout: float = 0.1):
@@ -274,11 +271,12 @@ class DeBERTaMeanPoolRegressor(nn.Module):
 
         self.backbone = AutoModel.from_pretrained(model_name)
         self.dropout = nn.Dropout(dropout)
-        # FIX #2: 4 outputs for CORAL ordinal (not 1 for regression)
-        self.classifier = nn.Linear(self.backbone.config.hidden_size, num_tasks)
+        # True CORAL: shared weight (H→1) + per-threshold biases
+        self.coral_weight = nn.Linear(self.backbone.config.hidden_size, 1)
+        self.coral_biases = nn.Parameter(torch.zeros(num_tasks))
         self.num_tasks = num_tasks
 
-        # Gradient checkpointing: DISABLED to reduce CPU RAM (GPU has room)
+        # Gradient checkpointing: DISABLED — causes CPU RAM OOM with R-Drop (2 forward passes)
         # self.backbone.gradient_checkpointing_enable()
 
     def forward(
@@ -297,8 +295,11 @@ class DeBERTaMeanPoolRegressor(nn.Module):
         hidden = outputs.last_hidden_state  # (B, L, H)
         mask = attention_mask.unsqueeze(-1).float()  # (B, L, 1)
         pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)  # (B, H)
+        pooled = self.dropout(pooled)
 
-        logits = self.classifier(self.dropout(pooled))  # (B, num_tasks)
+        # True CORAL: shared weight + task-specific biases
+        logit = self.coral_weight(pooled)  # (B, 1)
+        logits = logit + self.coral_biases  # (B, num_tasks)
         return logits
 
 

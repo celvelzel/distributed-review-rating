@@ -24,7 +24,7 @@ Training:
     Scheduler: Cosine with linear warmup (10%)
     Batch: 16, GradAcc: 16 (effective BS=256)
     Epochs: 5, Early stopping patience=3
-    Mixed precision: FP16, Gradient checkpointing DISABLED (LoRA saves memory)
+    Mixed precision: FP16, Gradient checkpointing ENABLED
 
 Strategy:
     Input: title + comment concatenated, pre-tokenized (SeqLen=128)
@@ -75,12 +75,12 @@ EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 EVIDENCE_PATH = EVIDENCE_DIR / "task-lora-deberta-rmse.txt"
 CHANGELOG_PATH = ROOT / "docs" / "changelog" / "deberta-lora-training.md"
 
-MODEL_NAME = "microsoft/deberta-v3-base"
+MODEL_NAME = "microsoft/deberta-v3-small"
 MAX_LENGTH = 128
 
 RANDOM_SEED = 42
-N_FOLDS = 5
-N_EPOCHS = 5
+N_FOLDS = 3
+N_EPOCHS = 3
 PATIENCE = 3
 BATCH_SIZE = 16
 GRAD_ACCUM_STEPS = 16
@@ -332,6 +332,7 @@ class DeBERTaLoRAModel(nn.Module):
         )
 
         self.backbone = get_peft_model(base_model, lora_config)
+        self.backbone.gradient_checkpointing_enable()
         self.dropout = nn.Dropout(0.1)
         self.classifier = nn.Linear(base_model.config.hidden_size, num_tasks)
         self.num_tasks = num_tasks

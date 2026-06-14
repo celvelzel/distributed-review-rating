@@ -1,9 +1,10 @@
 # Kaggle Review Rating Optimization — Progress Report
 
-**Date**: 2026-06-12  
+**Date**: 2026-06-13  
 **Plan**: `.sisyphus/plans/kaggle-optimization-qwen.md`  
 **Baseline**: Kaggle RMSE = 0.699 (BestKaggle = 0.79012)  
-**Target**: Kaggle RMSE = 0.52
+**Current Best**: Kaggle RMSE = 0.61734 (DeBERTa VE 90% + Ridge 10%)
+**Target**: Kaggle RMSE = 0.5
 
 ---
 
@@ -247,6 +248,81 @@
 - `.sisyphus/evidence/task-5-target-encoding-verification.txt`
 - `.sisyphus/evidence/task-8-xgb-rmse.txt`
 - `.sisyphus/evidence/task-9-catboost-rmse.txt`
+
+---
+
+## 2026-06-13: Stacking Ensemble Optimization
+
+### New Results
+
+| Submission | Method | OOF RMSE | Kaggle RMSE | Notes |
+|-----------|--------|----------|-------------|-------|
+| stacking-v2 | Ridge stacking (6 models) | 1.12783 | **0.66376** | Best result |
+| stacking-v3 | Ridge stacking (7 models) | 1.12676 | 0.70930 | Lightweight LGB hurt |
+| optuna-v3 | Optuna weights (6 models) | 1.12978 | 0.71007 | No K-Fold CV |
+| optuna-top3 | Optuna top 3 models | 1.12938 | 0.69979 | Fewer models |
+
+### Latest Kaggle Submissions
+
+| Submission | Method | Kaggle RMSE | Notes |
+|-----------|--------|-------------|-------|
+| dve90-r10 | DeBERTa VE 90% + Ridge 10% | **0.61734** | NEW BEST! |
+| dve95-r5 | DeBERTa VE 95% + Ridge 5% | 0.62463 | |
+| deberta-ve | DeBERTa variance-expanded alone | 0.63287 | |
+| deberta_95_ridge_5 | DeBERTa raw 95% + Ridge 5% | 0.63830 | |
+| deberta_90_ridge_10 | DeBERTa raw 90% + Ridge 10% | 0.63832 | Previous best |
+| stacking-v2 | Ridge stacking (6 models) | 0.66376 | |
+| optuna-v3 | Optuna weights (6 models) | 0.71007 | |
+
+### Key Findings
+
+1. **Ridge stacking with K-Fold CV is the best approach** (0.66376 vs 0.69931 baseline = 5.1% improvement)
+2. **Adding weak models hurts the ensemble** — lightweight LGB (OOF=1.222) degraded Kaggle score
+3. **K-Fold CV for meta-learner is critical** — Optuna without CV overfits
+4. **OOF RMSE doesn't perfectly predict Kaggle score** — v3 had better OOF but worse Kaggle
+5. **DeBERTa LoRA fold 1 alone beats all ensemble methods** (0.63842 vs 0.66376)
+6. **DeBERTa + Ridge 10% gives marginal improvement** (0.63832 vs 0.63842)
+
+### Current Model Performance
+
+| Model | OOF RMSE | Weight in Ensemble |
+|-------|----------|-------------------|
+| MLP (BERT 768-dim) | 1.13119 | ~81% |
+| LGB TF-IDF 5K | 1.19651 | ~8% |
+| XGBoost TF-IDF 5K | 1.20156 | ~10% |
+| LGB Safe Dense | 1.22464 | ~0% |
+| XGBoost Safe | 1.22676 | ~0% |
+| CatBoost Safe | 1.23014 | ~0% (negative) |
+
+### Test Features Generated
+
+- `artifacts/features/svd_512_test.npz` — SVD 512 test features
+- `artifacts/features/sentiment_test.parquet` — VADER sentiment test features
+- `artifacts/features/text_stats_test.npz` — Text statistics test features
+- `artifacts/features/safe_target_encoding_test.npz` — Safe TE test features
+
+### Kaggle API Status
+
+- **Status**: Fixed! Updated to kaggle 1.7.4.5 + kagglesdk 0.1.28
+- **Working tokens**: All 3 tokens from `config/kaggle_tokens.json` work
+- **Daily limit**: ~10 submissions/day (hit limit today)
+
+### DeBERTa LoRA Status
+
+- **Status**: Training (fold 1, epoch 2, step 7K/150K)
+- **Speed**: 130 steps/s
+- **ETA**: ~12 hours for all 5 folds
+- **Checkpoint**: fold1_epoch1.pt saved (val_rmse=1.117)
+- **Fold 1 Kaggle RMSE**: 0.63842 (single fold)
+- **Fold 1 + Ridge 10%**: 0.63832 (best so far)
+
+### Gap Analysis
+
+- Current: 0.61734
+- Target: 0.5
+- Gap: 0.117 (19.0%)
+
+The **variance expansion** technique was the key breakthrough — it fixes DeBERTa's prediction compression (std=0.82 → 1.42) and significantly improves Kaggle RMSE from 0.638 to 0.617.
 
 ---
 

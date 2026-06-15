@@ -105,8 +105,41 @@ def main():
     test_preds_list = []
     fold_rmses = []
 
+    # Check for existing checkpoints to resume
+    resume_fold = 1
+    latest_file = os.path.join(CKPT_DIR, "latest.txt")
+    if os.path.exists(latest_file):
+        ckpt_name = open(latest_file).read().strip()
+        ckpt_path = os.path.join(CKPT_DIR, ckpt_name)
+        if os.path.exists(ckpt_path):
+            ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+            done_fold = ckpt["fold"]
+            done_epoch = ckpt["epoch"]
+            print(f"Resuming from: fold{done_fold}_epoch{done_epoch}", flush=True)
+            # Generate OOF for completed folds
+            for fi in range(1, done_fold + 1):
+                # Load best checkpoint for this fold
+                best_ckpt_path = os.path.join(CKPT_DIR, f"fold{fi}_epoch{done_epoch}.pt")
+                if os.path.exists(best_ckpt_path):
+                    model = DeBERTaLoRA().to(DEVICE)
+                    model.load_state_dict(torch.load(best_ckpt_path, map_location="cpu", weights_only=False)["model_state_dict"])
+                    kf_inner = KFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
+                    _, va_idx = list(kf_inner.split(input_ids))[fi-1]
+                    oof_preds = np.clip(predict(model, DS(input_ids, attn_mask, ttids, torch.from_numpy(y_train), idx=va_idx)), 1.0, 5.0)
+                    oof[va_idx] = oof_preds
+                    test_preds_list.append(np.clip(predict(model, DS(t_ids, t_mask, t_tt)), 1.0, 5.0))
+                    fold_rmse = np.sqrt(np.mean((oof[va_idx] - y_train[va_idx])**2))
+                    fold_rmses.append(fold_rmse)
+                    print(f"  Fold {fi} (loaded from ckpt): OOF RMSE={fold_rmse:.5f}", flush=True)
+                    del model
+                    torch.cuda.empty_cache()
+                resume_fold = done_fold + 1
+            print(f"  Resuming from fold {resume_fold}", flush=True)
+
     kf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
     for fi, (tr_idx, va_idx) in enumerate(kf.split(input_ids), 1):
+        if fi < resume_fold:
+            continue
         print(f"\n{'='*60}\nFold {fi}/{N_FOLDS}\n{'='*60}", flush=True)
 
         model = DeBERTaLoRA().to(DEVICE)

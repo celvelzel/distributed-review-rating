@@ -104,6 +104,7 @@ def main():
 
     # Resume logic
     resume_fold = 1
+    resume_epoch = 0  # 0 means start from epoch 1
     ckpt_dir = CKPT_DIR
     latest_file = os.path.join(ckpt_dir, "latest.txt")
     if os.path.exists(latest_file):
@@ -113,8 +114,14 @@ def main():
             ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             done_fold = ckpt["fold"]
             done_epoch = ckpt["epoch"]
-            resume_fold = done_fold + 1
-            print(f"Resuming from fold {done_fold} epoch {done_epoch} -> start fold {resume_fold}", flush=True)
+            if done_epoch >= N_EPOCHS:
+                resume_fold = done_fold + 1
+                resume_epoch = 0
+                print(f"Fold {done_fold} fully done -> start fold {resume_fold}", flush=True)
+            else:
+                resume_fold = done_fold
+                resume_epoch = done_epoch
+                print(f"Fold {done_fold} epoch {done_epoch}/{N_EPOCHS} done -> resume fold {resume_fold} from epoch {resume_epoch + 1}", flush=True)
 
     # Train
     oof = np.zeros(len(y_train), dtype=np.float32)
@@ -145,11 +152,26 @@ def main():
         sched = get_cosine_schedule_with_warmup(opt, int(steps*N_EPOCHS*WARMUP_RATIO), steps*N_EPOCHS)
         scaler = GradScaler("cuda", enabled=FP16)
 
+        # Load optimizer/scheduler state if resuming mid-fold
+        start_epoch = 1
+        if fi == resume_fold and resume_epoch > 0:
+            resume_ckpt_path = os.path.join(ckpt_dir, f"fold{fi}_epoch{resume_epoch}.pt")
+            if os.path.exists(resume_ckpt_path):
+                r_ckpt = torch.load(resume_ckpt_path, map_location="cpu", weights_only=False)
+                model.load_state_dict(r_ckpt["model_state_dict"])
+                opt.load_state_dict(r_ckpt["optimizer_state_dict"])
+                sched.load_state_dict(r_ckpt["scheduler_state_dict"])
+                scaler.load_state_dict(r_ckpt["scaler_state_dict"])
+                start_epoch = resume_epoch + 1
+                best_rmse = r_ckpt.get("best_val_rmse", float("inf"))
+                patience = r_ckpt.get("patience_counter", 0)
+                print(f"  Loaded fold{fi}_epoch{resume_epoch} state, starting from epoch {start_epoch}", flush=True)
+
         best_rmse = float("inf")
         best_state = None
         patience = 0
 
-        for ep in range(1, N_EPOCHS + 1):
+        for ep in range(start_epoch, N_EPOCHS + 1):
             model.train()
             opt.zero_grad(set_to_none=True)
             t0 = time.time()

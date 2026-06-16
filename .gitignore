@@ -30,8 +30,10 @@ venv/
 *.log
 
 # Sisyphus internals
-.sisyphus/evidence/
-.sisyphus/boulder.json
+.sisyphus/
+
+# MiMoCode
+.mimocode/
 
 # IDE
 .vscode/

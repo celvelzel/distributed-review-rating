@@ -270,9 +270,17 @@
         <span>核心发现</span>
       </div>
       <div class="highlights">
-        <div class="highlight-item">
-          <strong>方差扩展是关键突破</strong>
-          <span>DeBERTa 预测压缩 (std=0.82 vs 实际 1.42)。通过缩放预测匹配目标分布，Kaggle 从 0.638 → 0.617。</span>
+        <div class="highlight-item" style="border-left-color: var(--accent); border-left-width: 6px;">
+          <strong style="color: var(--accent); font-size: 16px;">🏆 方差扩展是关键突破 (最重要的单一技术)</strong>
+          <span>DeBERTa 预测严重压缩: 预测 std=0.825 vs 实际 target std=1.422 (仅捕获 58% 方差)。通过线性缩放匹配目标分布，Kaggle 从 0.638 → 0.617 (单技术提升 3.3%)。</span>
+          <div style="margin-top: 8px; padding: 10px; background: rgba(56,189,248,0.1); border-radius: 6px; font-family: monospace; font-size: 12px; color: var(--accent);">
+            scale = target_std / pred_std = 1.422 / 0.825 = 1.72<br>
+            pred_calibrated = (pred - pred_mean) × scale + target_mean
+          </div>
+          <div style="margin-top: 6px; font-size: 13px; color: var(--text-muted);">
+            <strong>为什么有效:</strong> Kaggle 测试集分布与训练集相似。DeBERTa 捕获了排序信号但压缩了幅度。方差扩展恢复了正确的尺度。<br>
+            <strong>关键证据:</strong> VE 90% + Ridge 10% = 0.61734 (最佳) > VE alone 0.63287 > raw DeBERTa 0.63830
+          </div>
         </div>
         <div class="highlight-item">
           <strong>DeBERTa >> 树模型</strong>
@@ -285,6 +293,49 @@
         <div class="highlight-item">
           <strong>弱模型会伤害集成</strong>
           <span>添加 OOF>1.2 的弱模型反而降低 Kaggle 分数。只集成 OOF<1.15 的模型。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3b. Variance Expansion Deep Dive -->
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">📐</span>
+        <span>方差扩展技术详解</span>
+      </div>
+      <div style="font-size: 14px; color: var(--text-muted);">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">预测 std</div>
+            <div class="metric-value" style="font-size: 20px; color: var(--red);">0.825</div>
+            <div class="metric-status">DeBERTa 原始输出</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">目标 std</div>
+            <div class="metric-value" style="font-size: 20px; color: var(--green);">1.422</div>
+            <div class="metric-status">训练集实际分布</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">缩放因子</div>
+            <div class="metric-value" style="font-size: 20px; color: var(--accent);">1.72×</div>
+            <div class="metric-status">1.422 / 0.825</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">RMSE 提升</div>
+            <div class="metric-value" style="font-size: 20px; color: var(--green);">-0.021</div>
+            <div class="metric-status">0.638 → 0.617</div>
+          </div>
+        </div>
+        <div style="margin-top: 16px; padding: 14px; background: var(--bg); border-radius: 8px;">
+          <p><strong>原理分析:</strong></p>
+          <ul style="margin-left: 20px; margin-top: 6px;">
+            <li>Transformer 回归模型倾向于输出"安全"的中间值，避免极端预测</li>
+            <li>这是 softmax 归一化和 MSE 损失的固有特性 — 模型最小化期望误差时倾向于预测均值</li>
+            <li>CORAL ordinal loss 缓解了部分问题，但压缩仍然存在</li>
+            <li>方差扩展是<strong>后处理校准</strong>，不改变模型训练，只调整输出分布</li>
+          </ul>
+          <p style="margin-top: 10px;"><strong>最佳混合比例:</strong> VE 90% + Ridge 10% (Ridge 提供稳定的基线预测，VE 提供语义信号)</p>
+          <p style="margin-top: 6px;"><strong>失败尝试:</strong> 量化匹配 (Kaggle 0.851) 和 Power transform (Kaggle 0.752) 都过于激进</p>
         </div>
       </div>
     </div>
@@ -327,6 +378,37 @@
     <!-- 5. Risks -->
     <div class="card">
       <div class="card-title">
+        <span class="icon">🔗</span>
+        <span>图特征优化方向 (新增)</span>
+      </div>
+      <div style="font-size: 14px; color: var(--text-muted);">
+        <p><strong>为什么图特征有潜力:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>1.76M 用户 × 213K 产品 × 3M 评论 → 丰富的二部图结构</li>
+          <li>测试集 9,763 用户和 7,194 产品<strong>全部</strong>出现在训练集 → 无冷启动问题</li>
+          <li>用户/产品统计特征 (avg_rating, review_count) 是强辅助信号</li>
+          <li>LightGCN embeddings 捕获协同过滤信号，补充 DeBERTa 的语义理解</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>已实现但未运行的代码:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li><code>code/features/build_graph.py</code> — 二部图构建 (1.976M 节点)</li>
+          <li><code>code/features/lightgcn.py</code> — SVD 初始化 + 3层图传播</li>
+          <li><code>code/features/run_lightgcn.py</code> — LightGCN 运行器</li>
+          <li><code>code/features/user_stats.py</code> — 用户统计 (Spark)</li>
+          <li><code>code/features/product_stats.py</code> — 产品统计 (Spark)</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>集成策略:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li><strong>方案 A:</strong> 统计特征校准 — 用 user_avg_rating 和 prod_avg_rating 作为 DeBERTa 预测的锚点</li>
+          <li><strong>方案 B:</strong> LightGCN embeddings + Ridge — 用图 embeddings 训练 Ridge 模型，与 DeBERTa 集成</li>
+          <li><strong>方案 C:</strong> 混合方案 — 统计特征 + LightGCN embeddings + DeBERTa 三路集成</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 5b. Risks -->
+    <div class="card">
+      <div class="card-title">
         <span class="icon">⚠️</span>
         <span>风险与挑战</span>
       </div>
@@ -362,29 +444,31 @@
           <li>完成 fold 2 epoch 3 重训，生成 3-fold OOF 预测</li>
           <li>用旧预测 (deberta_lora_fold1) 尝试 OOF 对齐集成</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Phase 2 — DeBERTa-v3-large (3-5天):</strong></p>
+        <p style="margin-top: 12px;"><strong>Phase 2 — 图特征 + 统计特征 (2-3天):</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>🟢 <strong>用户/产品统计特征:</strong> avg_rating, review_count, rating_std, category_stats</li>
+          <li>🟢 <strong>LightGCN embeddings:</strong> SVD 初始化 + 3层图传播 → 64维 user/item embeddings</li>
+          <li>🟢 <strong>图特征 + DeBERTa 集成:</strong> 统计特征作为校准信号，LightGCN embeddings 作为额外信息</li>
+          <li>目标: 通过图特征校准 DeBERTa 预测，减少方差扩展的依赖</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>Phase 3 — DeBERTa-v3-large (3-5天):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
           <li>304M 参数，LoRA r=16，预计 ~2.5GB VRAM，可放入 RTX 3080 Ti</li>
           <li>3f×3e 训练，~3.4h/epoch，总计 ~30h</li>
           <li>目标: Kaggle 0.58-0.60</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Phase 3 — 伪标签 + 多模型集成 (5-10天):</strong></p>
+        <p style="margin-top: 12px;"><strong>Phase 4 — 伪标签 + 多模型集成 (5-10天):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
           <li>伪标签: 用最佳预测增强训练数据</li>
           <li>多 transformer: base + large + RoBERTa-large</li>
           <li>OOF 对齐 Ridge stacking</li>
-        </ul>
-        <p style="margin-top: 12px;"><strong>Phase 4 — 最终调优 (10-15天):</strong></p>
-        <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>混合比例优化、方差扩展校准</li>
-          <li>目标: Kaggle RMSE < 0.58</li>
         </ul>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-16 18:30</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-16 21:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

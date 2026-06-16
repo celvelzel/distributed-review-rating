@@ -250,14 +250,14 @@
             <tr><th>模型</th><th>OOF RMSE</th><th>Kaggle</th><th>状态</th></tr>
           </thead>
           <tbody>
-            <tr><td>DeBERTa-v3-base fold1</td><td>1.117</td><td class="score-best">0.638</td><td>✅ 最佳单模型</td></tr>
-            <tr><td>DeBERTa-v3-small 3fold</td><td>1.128</td><td>0.683</td><td>✅ 完成</td></tr>
+            <tr><td>DeBERTa-v3-base VE 90% + Ridge 10%</td><td>1.117</td><td class="score-best">0.617</td><td>🏆 最佳</td></tr>
+            <tr><td>base_ve_90_small_ve_10</td><td>—</td><td>0.634</td><td>✅ base+small 混合</td></tr>
+            <tr><td>DeBERTa-v3-base VE alone</td><td>1.117</td><td>0.633</td><td>✅ 无混合</td></tr>
+            <tr><td>DeBERTa-v3-base VE 95% + Ridge 5%</td><td>—</td><td>0.625</td><td>✅</td></tr>
+            <tr><td>DeBERTa-v3-small 3fold VE</td><td>1.128</td><td>0.683</td><td>✅ 已完成</td></tr>
+            <tr><td>Ridge Stacking (6模型)</td><td>1.128</td><td>0.664</td><td>✅ 完成</td></tr>
             <tr><td>MLP (BERT 768-dim)</td><td>1.131</td><td>—</td><td>✅ 完成</td></tr>
             <tr><td>Optuna Ensemble (6模型)</td><td>1.129</td><td>0.702</td><td>✅ 完成</td></tr>
-            <tr><td>Ridge Stacking (6模型)</td><td>1.128</td><td>0.664</td><td>✅ 完成</td></tr>
-            <tr><td>LGB TF-IDF 5K</td><td>1.197</td><td>—</td><td>✅ 完成</td></tr>
-            <tr><td>XGBoost TF-IDF 5K</td><td>1.202</td><td>—</td><td>✅ 完成</td></tr>
-            <tr><td>CatBoost Safe TE</td><td>1.391</td><td>—</td><td>❌ 太弱</td></tr>
           </tbody>
         </table>
       </div>
@@ -297,30 +297,31 @@
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">DeBERTa-v3-base</div>
-          <div class="metric-value" style="font-size: 16px;">Fold 1 完成</div>
-          <div class="metric-status">val_rmse=1.117, OOM受限</div>
+          <div class="metric-label">DeBERTa-v3-base (FULL 3M)</div>
+          <div class="metric-value" style="font-size: 16px;">Fold 3/3</div>
+          <div class="metric-status">Epoch 2 训练中 — 100 steps/s</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">DeBERTa-v3-small</div>
-          <div class="metric-value" style="font-size: 16px;">3/3 Folds ✅</div>
-          <div class="metric-status">OOF=1.128, 已完成</div>
+          <div class="metric-label">Checkpoints</div>
+          <div class="metric-value" style="font-size: 16px;">6 saved</div>
+          <div class="metric-status">fold1_e1-e3, fold2_e1-e2, fold3_e1</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">内存限制</div>
-          <div class="metric-value" style="font-size: 16px;">15GB</div>
-          <div class="metric-status">HPC cgroup 限制</div>
+          <div class="metric-label">GPU Memory</div>
+          <div class="metric-value">8.1GB</div>
+          <div class="metric-status">/ 12.6GB (64%)</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">GPU</div>
-          <div class="metric-value" style="font-size: 16px;">RTX 3080 Ti</div>
-          <div class="metric-status">12GB VRAM</div>
+          <div class="metric-label">ETA 完成</div>
+          <div class="metric-value" style="font-size: 18px;">~2.5h</div>
+          <div class="metric-status">Fold3 ep2+ep3 剩余</div>
         </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
-        <p><strong>配置:</strong> LoRA r=16 α=32, CORAL+R-Drop, BS=16, GradAcc=16</p>
-        <p><strong>关键限制:</strong> v3-base OOM (RSS>15GB), 仅完成 fold1。v3-small 3折完成但较弱。</p>
-        <p><strong>方差扩展:</strong> scale = target_std / pred_std = 1.42/0.82 = 1.72</p>
+        <p><strong>配置:</strong> LoRA r=16 α=32, CORAL+R-Drop, BS=32, GradAcc=8, FP16</p>
+        <p><strong>训练数据:</strong> FULL 3M 样本 (不再子采样)</p>
+        <p><strong>关键突破:</strong> cgroup 内存限制已解除 (251GB)，v3-base 可以在完整数据上训练</p>
+        <p><strong>对比:</strong> v3-base (86M) vs v3-small (44M) — base 模型 Kaggle 0.617, small 仅 0.683</p>
       </div>
     </div>
 
@@ -380,7 +381,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-15 04:00</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-16 05:30</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

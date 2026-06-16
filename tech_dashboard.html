@@ -379,7 +379,7 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">🔗</span>
-        <span>图特征优化方向 (新增)</span>
+        <span>图特征优化方向 (更新于 6/16 21:30)</span>
       </div>
       <div style="font-size: 14px; color: var(--text-muted);">
         <p><strong>为什么图特征有潜力:</strong></p>
@@ -389,19 +389,50 @@
           <li>用户/产品统计特征 (avg_rating, review_count) 是强辅助信号</li>
           <li>LightGCN embeddings 捕获协同过滤信号，补充 DeBERTa 的语义理解</li>
         </ul>
+        <p style="margin-top: 12px;"><strong>Phase 1 结果 (已验证):</strong></p>
+        <div class="metrics-grid" style="margin-top: 8px;">
+          <div class="metric-card">
+            <div class="metric-label">原始 Stats (11d)</div>
+            <div class="metric-value" style="font-size: 18px;">0.8076</div>
+            <div class="metric-status">OOF RMSE</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">扩展特征 (10d)</div>
+            <div class="metric-value" style="font-size: 18px; color: var(--green);">0.6728</div>
+            <div class="metric-status">-16.7%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">合并 (21d)</div>
+            <div class="metric-value" style="font-size: 18px; color: var(--green);">0.6478</div>
+            <div class="metric-status">-19.8%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">关键发现</div>
+            <div class="metric-value" style="font-size: 14px; color: var(--accent);">user_leniency</div>
+            <div class="metric-status">最强单一特征</div>
+          </div>
+        </div>
+        <p style="margin-top: 12px;"><strong>扩展特征详情:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li><strong>user_leniency:</strong> 用户评分倾向 (lenient vs harsh) — 最强信号</li>
+          <li><strong>user_harshness:</strong> 用户严厉程度绝对值</li>
+          <li><strong>user_cat_avg_rating:</strong> 用户在特定类别的平均评分</li>
+          <li><strong>user_cat_deviation:</strong> 用户在特定类别 vs 整体评分偏差</li>
+          <li><strong>store_product_count:</strong> 商店产品数量</li>
+          <li><strong>store_avg_rating_number:</strong> 商店平均外部评分数量</li>
+        </ul>
         <p style="margin-top: 12px;"><strong>已实现但未运行的代码:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
           <li><code>code/features/build_graph.py</code> — 二部图构建 (1.976M 节点)</li>
           <li><code>code/features/lightgcn.py</code> — SVD 初始化 + 3层图传播</li>
-          <li><code>code/features/run_lightgcn.py</code> — LightGCN 运行器</li>
-          <li><code>code/features/user_stats.py</code> — 用户统计 (Spark)</li>
-          <li><code>code/features/product_stats.py</code> — 产品统计 (Spark)</li>
+          <li><code>code/features/run_lightgcn_csv.py</code> — LightGCN 运行器</li>
+          <li><code>code/features/expand_graph_features.py</code> — 扩展图特征 (Phase 1)</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>集成策略:</strong></p>
+        <p style="margin-top: 12px;"><strong>LightGCN 结论:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li><strong>方案 A:</strong> 统计特征校准 — 用 user_avg_rating 和 prod_avg_rating 作为 DeBERTa 预测的锚点</li>
-          <li><strong>方案 B:</strong> LightGCN embeddings + Ridge — 用图 embeddings 训练 Ridge 模型，与 DeBERTa 集成</li>
-          <li><strong>方案 C:</strong> 混合方案 — 统计特征 + LightGCN embeddings + DeBERTa 三路集成</li>
+          <li>GCN embeddings OOF = 1.4186 (几乎等于 baseline 1.42) — <strong>不值得使用</strong></li>
+          <li>原因: 图太稀疏 (3M edges / 2M nodes, avg degree ~3), SVD 仅解释 7% 方差</li>
+          <li>推荐: 用统计特征替代 GCN embeddings</li>
         </ul>
       </div>
     </div>
@@ -435,40 +466,44 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">🎯</span>
-        <span>优化路线图 (更新于 6/16)</span>
+        <span>优化路线图 (更新于 6/16 22:00)</span>
       </div>
       <div style="font-size: 14px; color: var(--text-muted);">
-        <p><strong>Phase 1 — 调查 + OOF 集成 (1-2天):</strong></p>
+        <p><strong>Track A — DeBERTa-v3-base 全量测试 (HPC, 优先):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>🔴 调查为什么 full 3M 训练的预测比旧 1M 训练差 (Kaggle 0.69 vs 0.617)</li>
-          <li>完成 fold 2 epoch 3 重训，生成 3-fold OOF 预测</li>
-          <li>用旧预测 (deberta_lora_fold1) 尝试 OOF 对齐集成</li>
+          <li>🔴 调查为什么 full 3M 训练的 fold1 (0.69) 远差于旧 1M 训练 (0.617)</li>
+          <li>完成 fold2/fold3 训练, 生成 3-fold OOF 预测</li>
+          <li>用旧 fold1 预测 + 新 fold2/3 预测进行 OOF 集成</li>
+          <li>方差扩展 + Ridge blend, 提交 Kaggle 验证</li>
+          <li><strong>目标: 用 base 模型建立可靠的 Kaggle 基线</strong></li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Phase 2 — 图特征 + 统计特征 (2-3天):</strong></p>
+        <p style="margin-top: 12px;"><strong>Track B — DeBERTa-v3-large (HPC, Track A 完成后启动):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>🟢 <strong>用户/产品统计特征:</strong> avg_rating, review_count, rating_std, category_stats</li>
-          <li>🟢 <strong>LightGCN embeddings:</strong> SVD 初始化 + 3层图传播 → 64维 user/item embeddings</li>
-          <li>🟢 <strong>图特征 + DeBERTa 集成:</strong> 统计特征作为校准信号，LightGCN embeddings 作为额外信息</li>
-          <li>目标: 通过图特征校准 DeBERTa 预测，减少方差扩展的依赖</li>
-        </ul>
-        <p style="margin-top: 12px;"><strong>Phase 3 — DeBERTa-v3-large (3-5天):</strong></p>
-        <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>304M 参数，LoRA r=16，预计 ~2.5GB VRAM，可放入 RTX 3080 Ti</li>
-          <li>3f×3e 训练，~3.4h/epoch，总计 ~30h</li>
+          <li>304M 参数, LoRA r=16, 预计 ~2.5GB VRAM, 可放入 RTX 3080 Ti</li>
+          <li>3f x 3e 训练, ~3.4h/epoch, 总计 ~30h</li>
           <li>目标: Kaggle 0.58-0.60</li>
+          <li>Kaggle 分数回测, 与 Track A 对比</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Phase 4 — 伪标签 + 多模型集成 (5-10天):</strong></p>
+        <p style="margin-top: 12px;"><strong>Track C — 图特征拓展 (本地/并行):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>伪标签: 用最佳预测增强训练数据</li>
-          <li>多 transformer: base + large + RoBERTa-large</li>
-          <li>OOF 对齐 Ridge stacking</li>
+          <li>✅ Phase 1: 扩展图特征计算完成 (OOF 0.6478, -19.8%)</li>
+          <li>🟡 在 HPC 上加载 DeBERTa fold1 预测, blend 扩展特征 Ridge</li>
+          <li>🟡 可选: sentiment 特征 (17d, 需 nltk/textblob)</li>
+          <li><strong>目标: 用 Kaggle 分数验证图特征是否有效</strong></li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>合并策略 (Kaggle 分数回测):</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>每个 Track 产出独立的 Kaggle 提交</li>
+          <li>用 Kaggle RMSE 作为最终评判标准 (不依赖 OOF)</li>
+          <li>最佳 Track 的 VE + 扩展特征 Ridge 进行最终 blend</li>
+          <li>伪标签 + 多模型集成基于最佳 Track 的预测</li>
         </ul>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-16 21:00</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-16 22:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

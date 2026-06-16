@@ -223,13 +223,13 @@
             <tr><th>提交</th><th>分数</th><th>说明</th></tr>
           </thead>
           <tbody>
-            <tr><td>dve90-r10</td><td class="score-best">0.61734</td><td>🏆 DeBERTa VE 90% + Ridge 10%</td></tr>
+            <tr><td>dve90-r10</td><td class="score-best">0.61734</td><td>🏆 DeBERTa (OLD fold1) VE 90% + Ridge 10%</td></tr>
             <tr><td>dve95-r5</td><td>0.62463</td><td>DeBERTa VE 95% + Ridge 5%</td></tr>
             <tr><td>deberta-ve</td><td>0.63287</td><td>DeBERTa VE alone</td></tr>
-            <tr><td>draw95-r5</td><td>0.63830</td><td>DeBERTa raw 95% + Ridge 5%</td></tr>
-            <tr><td>deberta_90_ridge_10</td><td>0.63832</td><td>DeBERTa raw 90% + Ridge 10%</td></tr>
-            <tr><td>small_ve_base25</td><td>0.63962</td><td>DeBERTa-small VE + base 25%</td></tr>
-            <tr><td>small_ve_ridge10_base10</td><td>0.64520</td><td>Small VE + Ridge 10% + Base 10%</td></tr>
+            <tr><td>base_ve_90_small_ve_10</td><td>0.63449</td><td>base VE 90% + small VE 10% (6/16)</td></tr>
+            <tr><td>f1ve92_r8</td><td class="score-bad">0.69065</td><td>❌ NEW fold1 VE 92% + Ridge 8% (6/16)</td></tr>
+            <tr><td>ve2favg90_r10</td><td class="score-bad">0.69107</td><td>❌ NEW 2-fold avg VE 90% + Ridge 10% (6/16)</td></tr>
+            <tr><td>base_ensemble_ve85_r15</td><td>0.67988</td><td>2-fold ensemble + Ridge (6/16)</td></tr>
             <tr><td>stacking-v2</td><td>0.66376</td><td>Ridge stacking (6 models)</td></tr>
             <tr><td>optuna-ensemble</td><td>0.70168</td><td>Optuna ensemble</td></tr>
             <tr><td>submission-final</td><td>0.69931</td><td>原始 ensemble 基线</td></tr>
@@ -307,9 +307,9 @@
           <div class="metric-status">fold1_e1-e3, fold2_e1-e2, fold3_e1</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">GPU Memory</div>
-          <div class="metric-value">8.1GB</div>
-          <div class="metric-status">/ 12.6GB (64%)</div>
+          <div class="metric-label">⚠️ 新预测问题</div>
+          <div class="metric-value" style="font-size: 14px; color: var(--red);">Kaggle 0.69</div>
+          <div class="metric-status">新 fold1 vs 旧 fold1: 0.69 vs 0.617</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">ETA 完成</div>
@@ -319,9 +319,8 @@
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
         <p><strong>配置:</strong> LoRA r=16 α=32, CORAL+R-Drop, BS=32, GradAcc=8, FP16</p>
-        <p><strong>训练数据:</strong> FULL 3M 样本 (不再子采样)</p>
-        <p><strong>关键突破:</strong> cgroup 内存限制已解除 (251GB)，v3-base 可以在完整数据上训练</p>
-        <p><strong>对比:</strong> v3-base (86M) vs v3-small (44M) — base 模型 Kaggle 0.617, small 仅 0.683</p>
+        <p><strong>⚠️ 关键发现:</strong> Full 3M 训练的 fold1 预测 (std=0.812) Kaggle=0.69，远差于旧 1M 训练 (std=0.825) Kaggle=0.617。需要调查原因。</p>
+        <p><strong>旧预测仍可用:</strong> deberta_lora_fold1_test.npy (June 13) 精确匹配 0.61734 提交</p>
       </div>
     </div>
 
@@ -333,19 +332,19 @@
       </div>
       <div class="risks">
         <div class="risk-item critical">
+          <div class="risk-title"><span>🔴</span><span>新训练预测比旧训练差！</span></div>
+          <div="risk-desc">Full 3M 训练的 fold1 预测 (std=0.812) Kaggle=0.69 vs 旧 1M 训练 (std=0.825) Kaggle=0.617。需要调查原因。</div>
+          <div class="risk-plan">可能原因: KFold 种子不同、训练数据差异、或模型未充分收敛</div>
+        </div>
+        <div class="risk-item critical">
           <div class="risk-title"><span>🔴</span><span>差距 19% 仍然很大</span></div>
           <div class="risk-desc">0.617 → 0.500 需要 ~19% 改进。单靠方差扩展和集成无法达到。</div>
           <div class="risk-plan">需要更大模型 (DeBERTa-v3-large 304M) 或全新架构</div>
         </div>
-        <div class="risk-item critical">
-          <div class="risk-title"><span>🔴</span><span>Kaggle API 令牌被撤销</span></div>
-          <div class="risk-desc">KGAT_95032a9... 已失效。KGAT_9895fa8... 仍有读取权限但写入被限。</div>
-          <div class="risk-plan">每天限 10 次提交，需优先提交最有希望的预测</div>
-        </div>
         <div class="risk-item">
-          <div class="risk-title"><span>🟡</span><span>内存限制 15GB</span></div>
-          <div class="risk-desc">DeBERTa-v3-base (86M参数) OOM。只能训练 v3-small (44M)。</div>
-          <div class="risk-plan">使用数据子采样 (500K/1M) 或请求更高内存配额</div>
+          <div class="risk-title"><span>🟡</span><span>每日提交限制 10 次</span></div>
+          <div class="risk-desc">今天 10/10 已用完。需要更谨慎地选择提交。</div>
+          <div class="risk-plan">优先提交最有希望的预测，避免浪费</div>
         </div>
       </div>
     </div>
@@ -354,34 +353,38 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">🎯</span>
-        <span>改进计划</span>
+        <span>优化路线图 (更新于 6/16)</span>
       </div>
       <div style="font-size: 14px; color: var(--text-muted);">
-        <p><strong>短期 (1-2天):</strong></p>
+        <p><strong>Phase 1 — 调查 + OOF 集成 (1-2天):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>等待 Kaggle 每日限制重置，提交 base+small 混合变体</li>
-          <li>尝试更多方差扩展比例 (小模型 + Ridge + base 混合)</li>
-          <li>恢复 DeBERTa-v3-base 训练 (1M 子采样 + gradient checkpointing)</li>
+          <li>🔴 调查为什么 full 3M 训练的预测比旧 1M 训练差 (Kaggle 0.69 vs 0.617)</li>
+          <li>完成 fold 2 epoch 3 重训，生成 3-fold OOF 预测</li>
+          <li>用旧预测 (deberta_lora_fold1) 尝试 OOF 对齐集成</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>中期 (3-7天):</strong></p>
+        <p style="margin-top: 12px;"><strong>Phase 2 — DeBERTa-v3-large (3-5天):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>完成 DeBERTa-v3-base 5折训练 (需要解决 OOM 或增加内存)</li>
-          <li>训练 DeBERTa-v3-large (304M参数) — 需要更高内存配额</li>
-          <li>尝试伪标签 (用当前最佳预测增强训练数据)</li>
-          <li>训练互补模型 (RoBERTa, ELECTRA) 增加多样性</li>
+          <li>304M 参数，LoRA r=16，预计 ~2.5GB VRAM，可放入 RTX 3080 Ti</li>
+          <li>3f×3e 训练，~3.4h/epoch，总计 ~30h</li>
+          <li>目标: Kaggle 0.58-0.60</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>长期:</strong></p>
+        <p style="margin-top: 12px;"><strong>Phase 3 — 伪标签 + 多模型集成 (5-10天):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>多 transformer 集成 (base + large + small)</li>
-          <li>更好的后处理 (校准、分位数映射)</li>
-          <li>目标: Kaggle RMSE < 0.60 (接近竞争对手 0.62)</li>
+          <li>伪标签: 用最佳预测增强训练数据</li>
+          <li>多 transformer: base + large + RoBERTa-large</li>
+          <li>OOF 对齐 Ridge stacking</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>Phase 4 — 最终调优 (10-15天):</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>混合比例优化、方差扩展校准</li>
+          <li>目标: Kaggle RMSE < 0.58</li>
         </ul>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-16 05:30</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-16 18:30</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

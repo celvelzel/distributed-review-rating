@@ -142,6 +142,8 @@ def main():
     np.save(os.path.join(MODEL_DIR, "deberta_base_ensemble_test.npy"), avg_test)
     np.save(os.path.join(MODEL_DIR, "deberta_base_ensemble_ve.npy"), ve_test)
 
+    import pandas as pd
+
     # Blends
     ridge_test = np.load(os.path.join(MODEL_DIR, "stacking_v2_test.npy")).astype(np.float32)
     for w in [85, 90, 95]:
@@ -152,7 +154,6 @@ def main():
     pd.DataFrame({"id": test_ids, "rating": avg_test}).to_csv(
         os.path.join(OUTPUT_DIR, "submission-base_ensemble.csv"), index=False)
 
-    import pandas as pd
     pd.DataFrame({"id": test_ids, "rating": ve_test}).to_csv(
         os.path.join(OUTPUT_DIR, "submission-base_ensemble_ve.csv"), index=False)
 

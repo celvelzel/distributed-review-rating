@@ -73,14 +73,3 @@ Place data files in `data/` (excluded from git).
 | [Status Report](docs/changelog/2026-06-12-status-report.md) | Latest progress and metrics |
 | [Technical Dashboard](tech_dashboard.html) | Real-time project status |
 
-## Team
-
-| Role | Name |
-|------|------|
-| Member 1 | [Name] |
-| Member 2 | [Name] |
-| Member 3 | [Name] |
-
-## License
-
-Academic project — not for commercial use.

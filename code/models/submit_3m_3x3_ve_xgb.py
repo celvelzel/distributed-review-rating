@@ -279,8 +279,8 @@ def main():
         oof_path = os.path.join(MODEL_DIR, "deberta_3m_3x3_oof.npy")
         test_path = os.path.join(MODEL_DIR, "deberta_3m_3x3_test.npy")
         if not os.path.exists(oof_path):
-            oof_path = os.path.join(MODEL_DIR, "deberta_base_oof.npy")
-            test_path = os.path.join(MODEL_DIR, "deberta_base_ensemble_test.npy")
+            oof_path = os.path.join(MODEL_DIR, "deberta_base_full_oof.npy")
+            test_path = os.path.join(MODEL_DIR, "deberta_base_full_test.npy")
         deberta_oof = np.load(oof_path)
         deberta_test = np.load(test_path)
         td2 = np.load(os.path.join(MODEL_DIR, "test_tokens.npz"), allow_pickle=True)
@@ -296,8 +296,8 @@ def main():
     deberta_test_ve = step2_variance_expand(deberta_test, y_train)
 
     # Step 3: Load XGBoost OOF and find optimal ratio
-    xgb_oof_path = os.path.join(FEAT_DIR, "xgboost_expanded_oof.npy")
-    xgb_test_path = os.path.join(FEAT_DIR, "xgboost_expanded_test.npy")
+    xgb_oof_path = os.path.join(FEAT_DIR, "xgboost_full_oof.npy")
+    xgb_test_path = os.path.join(FEAT_DIR, "xgboost_full_test.npy")
     if not os.path.exists(xgb_oof_path):
         print(f"\nERROR: {xgb_oof_path} not found. Run xgboost_full.py first.")
         sys.exit(1)

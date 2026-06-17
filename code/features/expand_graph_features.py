@@ -154,59 +154,86 @@ def compute_rating_deviation_test(train_df, test_df, prodinfo_df):
     return test_dev[["id", "user_leniency", "user_harshness", "user_num_reviews_oof"]]
 
 
-def compute_user_category_features(train_df, test_df, prodinfo_df):
-    """Compute user-category interaction features."""
-    print("  [user-cat] Computing user-category features...")
+def compute_user_category_features(train_df, test_df, prodinfo_df, n_splits=5):
+    """Compute user-category interaction features with K-Fold OOF (no leakage)."""
+    print("  [user-cat] Computing user-category features (K-Fold OOF)...")
     t0 = time.time()
 
     prod_cat = prodinfo_df[["parent_prod_id", "main_category"]].drop_duplicates("parent_prod_id")
 
-    # Train features
+    # Prepare train with category
     train_merged = train_df.copy()
     if "main_category" not in train_merged.columns:
         train_merged = train_merged.merge(prod_cat, on="parent_prod_id", how="left")
         train_merged["main_category"] = train_merged["main_category"].fillna("Unknown")
-    user_cat_stats = train_merged.groupby(["user_id", "main_category"]).agg(
+
+    # K-Fold OOF for train
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    oof_parts = []
+
+    for fold_idx, (tr_idx, va_idx) in enumerate(kf.split(train_merged)):
+        tr_data = train_merged.iloc[tr_idx]
+        va_data = train_merged.iloc[va_idx]
+
+        # Stats from OTHER folds only
+        user_cat_stats = tr_data.groupby(["user_id", "main_category"]).agg(
+            user_cat_avg_rating=("rating", "mean"),
+            user_cat_review_count=("rating", "count"),
+        ).reset_index()
+
+        user_global = tr_data.groupby("user_id").agg(
+            user_global_avg=("rating", "mean"),
+        ).reset_index()
+
+        user_cat_stats = user_cat_stats.merge(user_global, on="user_id", how="left")
+        user_cat_stats["user_cat_deviation"] = user_cat_stats["user_cat_avg_rating"] - user_cat_stats["user_global_avg"]
+
+        # Merge to validation fold
+        va_key = va_data[["id", "user_id", "parent_prod_id"]].copy()
+        if "main_category" not in va_key.columns:
+            va_key = va_key.merge(prod_cat, on="parent_prod_id", how="left")
+            va_key["main_category"] = va_key["main_category"].fillna("Unknown")
+        else:
+            va_key["main_category"] = va_data["main_category"].values
+
+        va_feats = va_key.merge(user_cat_stats, on=["user_id", "main_category"], how="left")
+
+        global_avg = tr_data["rating"].mean()
+        oof_parts.append(pd.DataFrame({
+            "id": va_data["id"].values,
+            "user_cat_avg_rating": va_feats["user_cat_avg_rating"].fillna(global_avg).values,
+            "user_cat_review_count": va_feats["user_cat_review_count"].fillna(0).values,
+            "user_cat_deviation": va_feats["user_cat_deviation"].fillna(0).values,
+        }))
+
+    train_result = pd.concat(oof_parts, ignore_index=True).sort_values("id").reset_index(drop=True)
+    print(f"    Train OOF: {train_result.shape}")
+
+    # Test features: use FULL training stats (no leakage for test)
+    user_cat_stats_full = train_merged.groupby(["user_id", "main_category"]).agg(
         user_cat_avg_rating=("rating", "mean"),
         user_cat_review_count=("rating", "count"),
     ).reset_index()
 
-    # Global user stats for comparison
-    user_global = train_merged.groupby("user_id").agg(
+    user_global_full = train_merged.groupby("user_id").agg(
         user_global_avg=("rating", "mean"),
     ).reset_index()
 
-    user_cat_stats = user_cat_stats.merge(user_global, on="user_id", how="left")
-    user_cat_stats["user_cat_deviation"] = user_cat_stats["user_cat_avg_rating"] - user_cat_stats["user_global_avg"]
+    user_cat_stats_full = user_cat_stats_full.merge(user_global_full, on="user_id", how="left")
+    user_cat_stats_full["user_cat_deviation"] = user_cat_stats_full["user_cat_avg_rating"] - user_cat_stats_full["user_global_avg"]
 
-    # Map to train
-    train_key = train_df[["id", "user_id", "parent_prod_id"]].copy()
-    if "main_category" not in train_key.columns:
-        train_key = train_key.merge(prod_cat, on="parent_prod_id", how="left")
-        train_key["main_category"] = train_key["main_category"].fillna("Unknown")
-    else:
-        train_key["main_category"] = train_df["main_category"].values
-    train_feats = train_key.merge(user_cat_stats, on=["user_id", "main_category"], how="left")
-
-    train_result = pd.DataFrame({
-        "id": train_df["id"].values,
-        "user_cat_avg_rating": train_feats["user_cat_avg_rating"].fillna(0).values,
-        "user_cat_review_count": train_feats["user_cat_review_count"].fillna(0).values,
-        "user_cat_deviation": train_feats["user_cat_deviation"].fillna(0).values,
-    })
-
-    # Test features
     test_key = test_df[["id", "user_id", "parent_prod_id"]].copy()
     if "main_category" not in test_key.columns:
         test_key = test_key.merge(prod_cat, on="parent_prod_id", how="left")
         test_key["main_category"] = test_key["main_category"].fillna("Unknown")
     else:
         test_key["main_category"] = test_df["main_category"].values
-    test_feats = test_key.merge(user_cat_stats, on=["user_id", "main_category"], how="left")
+    test_feats = test_key.merge(user_cat_stats_full, on=["user_id", "main_category"], how="left")
 
+    global_avg = train_merged["rating"].mean()
     test_result = pd.DataFrame({
         "id": test_df["id"].values,
-        "user_cat_avg_rating": test_feats["user_cat_avg_rating"].fillna(0).values,
+        "user_cat_avg_rating": test_feats["user_cat_avg_rating"].fillna(global_avg).values,
         "user_cat_review_count": test_feats["user_cat_review_count"].fillna(0).values,
         "user_cat_deviation": test_feats["user_cat_deviation"].fillna(0).values,
     })

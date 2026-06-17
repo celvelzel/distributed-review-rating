@@ -46,6 +46,7 @@ class DeBERTaLoRA(nn.Module):
         cfg = LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA, target_modules=LORA_TARGET,
                          lora_dropout=LORA_DROPOUT, bias="none")
         self.backbone = get_peft_model(base, cfg)
+        self.backbone.gradient_checkpointing_enable()
         self.dropout = nn.Dropout(0.1)
         self.classifier = nn.Linear(base.config.hidden_size, N_TASKS)
         self.backbone.print_trainable_parameters()

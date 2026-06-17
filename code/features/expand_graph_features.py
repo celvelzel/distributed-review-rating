@@ -187,9 +187,6 @@ def compute_user_category_features(train_df, test_df, prodinfo_df):
     else:
         train_key["main_category"] = train_df["main_category"].values
     train_feats = train_key.merge(user_cat_stats, on=["user_id", "main_category"], how="left")
-    train_feats = train_feats.reindex(train_df["id"].values)
-    train_feats.index = train_df["id"].values
-    train_feats = train_feats.sort_index()
 
     train_result = pd.DataFrame({
         "id": train_df["id"].values,
@@ -226,13 +223,14 @@ def main():
     print("=" * 60)
     print("STEP 1: Loading data")
     print("=" * 60)
-    train_df = pd.read_csv(os.path.join(DATA_DIR, "train.csv"))
+    train_df = pd.read_parquet(os.path.join(PROJECT_ROOT, "artifacts", "etl", "train.parquet"))
     test_df = pd.read_csv(os.path.join(DATA_DIR, "test.csv"))
-    prodinfo_df = pd.read_csv(os.path.join(DATA_DIR, "prodInfo.csv"))
+    prodinfo_df = pd.read_parquet(os.path.join(PROJECT_ROOT, "artifacts", "etl", "prodinfo.parquet"))
 
-    # Add main_category to train/test (fill missing with "Unknown")
+    # Add main_category to test (train already has it from parquet)
     prod_cat = prodinfo_df[["parent_prod_id", "main_category"]].drop_duplicates("parent_prod_id")
-    train_df = train_df.merge(prod_cat, on="parent_prod_id", how="left")
+    if "main_category" not in train_df.columns:
+        train_df = train_df.merge(prod_cat, on="parent_prod_id", how="left")
     test_df = test_df.merge(prod_cat, on="parent_prod_id", how="left")
     train_df["main_category"] = train_df["main_category"].fillna("Unknown")
     test_df["main_category"] = test_df["main_category"].fillna("Unknown")

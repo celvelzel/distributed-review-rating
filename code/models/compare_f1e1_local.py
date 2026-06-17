@@ -1,13 +1,21 @@
 #!/usr/bin/env python
 """
-Compare 3M fold1_epoch1 predictions with old 1M fold1 predictions.
-Does NOT submit to Kaggle - local comparison only.
+Generate submission CSVs for 3M fold1 (epoch1 & epoch3) with VE 90% + Ridge 10%.
+Also compares with old 1M fold1 predictions.
+
+Outputs:
+  output/submission-3m-f1e1-ve90-r10.csv   (fold1 epoch1)
+  output/submission-3m-f1e3-ve90-r10.csv   (fold1 epoch3)
+
+Usage:
+  python code/models/compare_f1e1_local.py
 """
 
 import os, sys
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -16,6 +24,8 @@ from torch.amp import autocast
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODEL_DIR = os.path.join(ROOT, "artifacts", "models")
 FEAT_DIR = os.path.join(ROOT, "artifacts", "features")
+OUTPUT_DIR = os.path.join(ROOT, "output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 MODEL_NAME = "microsoft/deberta-v3-base"
 LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.05
@@ -73,13 +83,23 @@ def variance_expand(preds, target_mean, target_std):
     return np.clip((preds - p_mean) / p_std * target_std + target_mean, 1.0, 5.0)
 
 
+def load_checkpoint_preds(ckpt_path, test_ds):
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    print(f"  Checkpoint: fold={ckpt['fold']}, epoch={ckpt['epoch']}, best_val_rmse={ckpt.get('best_val_rmse', 'N/A')}")
+    model = DeBERTaLoRA().to(DEVICE)
+    model.load_state_dict(ckpt["model_state_dict"])
+    preds = np.clip(predict(model, test_ds), 1.0, 5.0)
+    del model; torch.cuda.empty_cache()
+    return preds, ckpt
+
+
 def main():
     print("=" * 70)
-    print("3M fold1_epoch1 vs Old 1M fold1 Comparison (LOCAL ONLY)")
+    print("3M fold1 Submissions: epoch1 & epoch3 (VE 90% + Ridge 10%)")
     print("=" * 70)
 
     # Load test data
-    print("\n[1/4] Loading test data...")
+    print("\n[1/5] Loading test data...")
     td2 = np.load(os.path.join(MODEL_DIR, "test_tokens.npz"), allow_pickle=True)
     test_ids = td2["ids"]
     t_ids = torch.from_numpy(td2["input_ids"]).to(torch.int32)
@@ -93,81 +113,115 @@ def main():
     target_mean, target_std = y_train.mean(), y_train.std()
     print(f"  Labels: mean={target_mean:.4f}, std={target_std:.4f}")
 
-    # Load old 1M fold1 predictions
-    print("\n[2/4] Loading old 1M fold1 predictions...")
+    # Load old 1M fold1 predictions (reference)
+    print("\n[2/5] Loading old 1M fold1 predictions (reference)...")
     old_path = os.path.join(MODEL_DIR, "deberta_lora_fold1_test.npy")
+    old_preds = None
     if os.path.exists(old_path):
         old_preds = np.load(old_path)
         print(f"  Old 1M fold1: mean={old_preds.mean():.4f}, std={old_preds.std():.4f}")
     else:
         print(f"  WARNING: {old_path} not found!")
-        old_preds = None
 
-    # Load 3M fold1_epoch1 checkpoint
-    print("\n[3/4] Loading 3M fold1_epoch1 checkpoint...")
-    ckpt_path = os.path.join(MODEL_DIR, "checkpoints_base_full", "fold1_epoch1.pt")
-    if not os.path.exists(ckpt_path):
-        print(f"  ERROR: {ckpt_path} not found!")
+    # Load Ridge stacking predictions for blend
+    ridge_path = os.path.join(MODEL_DIR, "stacking_v2_test.npy")
+    ridge_preds = None
+    if os.path.exists(ridge_path):
+        ridge_preds = np.load(ridge_path).astype(np.float32)
+        print(f"  Ridge stacking: mean={ridge_preds.mean():.4f}, std={ridge_preds.std():.4f}")
+    else:
+        print(f"  WARNING: {ridge_path} not found, will skip Ridge blend")
+
+    # Generate predictions for epoch1 and epoch3
+    ckpt_dir = os.path.join(MODEL_DIR, "checkpoints_base_full")
+    epochs_to_check = {"e1": "fold1_epoch1.pt", "e3": "fold1_epoch3.pt"}
+    results = {}
+
+    for label, ckpt_name in epochs_to_check.items():
+        ckpt_path = os.path.join(ckpt_dir, ckpt_name)
+        if not os.path.exists(ckpt_path):
+            print(f"\n  SKIP: {ckpt_name} not found at {ckpt_path}")
+            continue
+
+        print(f"\n[3/5] Loading 3M fold1 {label} checkpoint...")
+        preds, ckpt = load_checkpoint_preds(ckpt_path, test_ds)
+        results[label] = preds
+        print(f"  3M fold1 {label}: mean={preds.mean():.4f}, std={preds.std():.4f}")
+
+    if not results:
+        print("\nERROR: No checkpoints found!")
         return
 
-    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    print(f"  Checkpoint: fold={ckpt['fold']}, epoch={ckpt['epoch']}")
-    print(f"  best_val_rmse: {ckpt.get('best_val_rmse', 'N/A')}")
+    # Compare epoch1 vs epoch3
+    if "e1" in results and "e3" in results:
+        print("\n" + "=" * 70)
+        print("EPOCH1 vs EPOCH3 COMPARISON")
+        print("=" * 70)
+        e1, e3 = results["e1"], results["e3"]
+        corr_e1_e3 = np.corrcoef(e1, e3)[0, 1]
+        diff_e1_e3 = e3 - e1
+        print(f"  Correlation: {corr_e1_e3:.6f}")
+        print(f"  Mean diff (e3 - e1): {diff_e1_e3.mean():.6f}")
+        print(f"  Std diff: {diff_e1_e3.std():.6f}")
+        print(f"  Samples with |diff| > 0.1: {(np.abs(diff_e1_e3) > 0.1).sum():,}")
 
-    # Generate 3M fold1_epoch1 predictions
-    print("\n[4/4] Generating 3M fold1_epoch1 predictions...")
-    model = DeBERTaLoRA().to(DEVICE)
-    model.load_state_dict(ckpt["model_state_dict"])
-    new_preds = np.clip(predict(model, test_ds), 1.0, 5.0)
-    del model; torch.cuda.empty_cache()
-    print(f"  3M fold1_epoch1: mean={new_preds.mean():.4f}, std={new_preds.std():.4f}")
+    # Compare with old 1M
+    if old_preds is not None:
+        print("\n" + "=" * 70)
+        print("OLD 1M vs NEW 3M COMPARISON")
+        print("=" * 70)
+        for label, preds in results.items():
+            corr = np.corrcoef(old_preds, preds)[0, 1]
+            diff = preds - old_preds
+            print(f"\n  Old 1M vs 3M {label}:")
+            print(f"    Correlation: {corr:.6f}")
+            print(f"    Mean diff: {diff.mean():.6f}")
+            print(f"    Std diff: {diff.std():.6f}")
 
-    # Compare
+    # Generate submission CSVs
     print("\n" + "=" * 70)
-    print("COMPARISON RESULTS")
+    print("GENERATING SUBMISSIONS (VE 90% + Ridge 10%)")
     print("=" * 70)
 
-    if old_preds is not None:
-        corr = np.corrcoef(old_preds, new_preds)[0, 1]
-        diff = new_preds - old_preds
-        abs_diff = np.abs(diff)
+    for label, preds in results.items():
+        epoch_name = "e1" if label == "e1" else "e3"
 
-        print(f"\n{'Metric':<35} {'Old 1M fold1':<20} {'New 3M f1e1':<20}")
-        print("-" * 75)
-        print(f"{'Mean':<35} {old_preds.mean():<20.4f} {new_preds.mean():<20.4f}")
-        print(f"{'Std':<35} {old_preds.std():<20.4f} {new_preds.std():<20.4f}")
-        print(f"{'Min':<35} {old_preds.min():<20.4f} {new_preds.min():<20.4f}")
-        print(f"{'Max':<35} {old_preds.max():<20.4f} {new_preds.max():<20.4f}")
+        # Apply VE
+        ve_preds = variance_expand(preds, target_mean, target_std)
+        print(f"\n  3M fold1 {label}:")
+        print(f"    Raw: mean={preds.mean():.4f}, std={preds.std():.4f}")
+        print(f"    VE:  mean={ve_preds.mean():.4f}, std={ve_preds.std():.4f}")
 
-        print(f"\nCorrelation (Pearson r): {corr:.6f}")
-        print(f"Mean diff (new - old): {diff.mean():.6f}")
-        print(f"Std diff: {diff.std():.6f}")
-        print(f"Max |diff|: {abs_diff.max():.6f}")
-        print(f"Samples with |diff| > 0.1: {(abs_diff > 0.1).sum():,} / {len(diff):,} ({(abs_diff > 0.1).mean()*100:.1f}%)")
-        print(f"Samples with |diff| > 0.5: {(abs_diff > 0.5).sum():,} / {len(diff):,} ({(abs_diff > 0.5).mean()*100:.1f}%)")
+        # Blend with Ridge (VE 90% + Ridge 10%)
+        if ridge_preds is not None:
+            blend = np.clip(0.9 * ve_preds + 0.1 * ridge_preds, 1.0, 5.0)
+            filename = f"submission-3m-f1{epoch_name}-ve90-r10.csv"
+            pd.DataFrame({"id": test_ids, "rating": blend}).to_csv(
+                os.path.join(OUTPUT_DIR, filename), index=False)
+            print(f"    Blend (VE 90% + Ridge 10%): mean={blend.mean():.4f}, std={blend.std():.4f}")
+            print(f"    Saved: {filename}")
+        else:
+            # VE only
+            filename = f"submission-3m-f1{epoch_name}-ve-only.csv"
+            pd.DataFrame({"id": test_ids, "rating": ve_preds}).to_csv(
+                os.path.join(OUTPUT_DIR, filename), index=False)
+            print(f"    VE only: mean={ve_preds.mean():.4f}, std={ve_preds.std():.4f}")
+            print(f"    Saved: {filename}")
 
-        # VE comparison
-        print(f"\nVariance Expansion (VE) comparison:")
-        old_ve = variance_expand(old_preds, target_mean, target_std)
-        new_ve = variance_expand(new_preds, target_mean, target_std)
-        print(f"  Old VE: mean={old_ve.mean():.4f}, std={old_ve.std():.4f}")
-        print(f"  New VE: mean={new_ve.mean():.4f}, std={new_ve.std():.4f}")
-        ve_corr = np.corrcoef(old_ve, new_ve)[0, 1]
-        print(f"  VE correlation: {ve_corr:.6f}")
+    # Summary
+    print("\n" + "=" * 70)
+    print("SUBMISSION SUMMARY")
+    print("=" * 70)
+    print(f"\n  Old 1M fold1 (reference): Kaggle = 0.61734")
+    for label, preds in results.items():
+        epoch_name = "e1" if label == "e1" else "e3"
+        print(f"  3M fold1 {label}: output/submission-3m-f1{epoch_name}-ve90-r10.csv")
 
-        # Save predictions for later use
-        np.save(os.path.join(MODEL_DIR, "deberta_3m_f1e1_test.npy"), new_preds)
-        print(f"\nSaved: deberta_3m_f1e1_test.npy")
+    print(f"\n  Key question: Does epoch1 > epoch3 on Kaggle?")
+    print(f"  If yes -> overfitting confirmed, use epoch1")
+    print(f"  If no  -> more training helps, use epoch3")
 
-        # Generate blend candidates
-        print(f"\nBlend candidates (local OOF proxy):")
-        for w_old in [70, 80, 90, 95]:
-            w_new = 100 - w_old
-            blend = np.clip(w_old/100 * old_preds + w_new/100 * new_preds, 1.0, 5.0)
-            blend_ve = variance_expand(blend, target_mean, target_std)
-            print(f"  Old {w_old}% + New {w_new}%: mean={blend.mean():.4f}, std={blend.std():.4f}, VE std={blend_ve.std():.4f}")
-
-    print("\n=== Done (LOCAL ONLY - no Kaggle submission) ===")
+    print("\n=== Done ===")
 
 
 if __name__ == "__main__":

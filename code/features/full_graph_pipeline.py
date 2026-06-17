@@ -33,13 +33,13 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 
 def load_gcn_embeddings():
     """Load LightGCN embeddings and mappings."""
-    user_emb = np.load(os.path.join(FEAT_DIR, "user_emb_gcn.npy"), mmap_mode="r")
-    item_emb = np.load(os.path.join(FEAT_DIR, "item_emb_gcn.npy"), mmap_mode="r")
+    user_emb = np.load(os.path.join(FEAT_DIR, "user_emb.npy"), mmap_mode="r")
+    item_emb = np.load(os.path.join(FEAT_DIR, "item_emb.npy"), mmap_mode="r")
 
     import json
-    with open(os.path.join(FEAT_DIR, "user2idx_gcn.json")) as f:
+    with open(os.path.join(FEAT_DIR, "user2idx.json")) as f:
         user2idx = json.load(f)
-    with open(os.path.join(FEAT_DIR, "item2idx_gcn.json")) as f:
+    with open(os.path.join(FEAT_DIR, "item2idx.json")) as f:
         item2idx = json.load(f)
 
     return user_emb, item_emb, user2idx, item2idx

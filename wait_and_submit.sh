@@ -2,9 +2,16 @@
 # Wait for DeBERTa training to complete, then generate predictions and submit
 set -e
 
-PROJECT="/hpc/puhome/25116696g/COMP5434_BDC/distributed-review-rating"
-PYTHON="/hpc/puhome/25116696g/.conda/envs/SHPC-env/bin/python"
+PROJECT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOKEN_FILE="$PROJECT/config/kaggle_tokens.json"
 LOG="$PROJECT/artifacts/wait_and_submit.log"
+
+if [ ! -f "$TOKEN_FILE" ]; then
+    echo "ERROR: $TOKEN_FILE not found."
+    exit 1
+fi
+
+export KAGGLE_API_TOKEN=$(python3 -c "import json; print(json.load(open('$TOKEN_FILE'))['tokens'][0])")
 
 echo "$(date): Waiting for DeBERTa training to complete..." >> "$LOG"
 
@@ -17,10 +24,9 @@ echo "$(date): Training completed!" >> "$LOG"
 
 # Generate predictions
 cd "$PROJECT"
-$PYTHON code/models/auto_submit.py >> "$LOG" 2>&1
+python code/models/auto_submit.py >> "$LOG" 2>&1
 
 # Try to submit
-export KAGGLE_API_TOKEN=KGAT_95032a984dab4b2545f71383d9913c63
 if kaggle competitions submit -c comp-5434-2526-sem-3-project \
     -f output/submission-deberta-ensemble.csv \
     -m "deberta-small-ensemble" 2>&1; then

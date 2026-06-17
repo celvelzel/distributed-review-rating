@@ -12,24 +12,25 @@ This project builds a prediction system for review ratings using PySpark for dis
 ## Repository Structure
 
 ```
+├── .mimocode/              # MiMoCode agent session state
+├── .opencode/              # Project-local skills (kaggle-optimizer, kaggle-submission)
 ├── code/                  # All source code
-│   ├── run.sh             # Main entry point
 │   ├── requirements.txt   # Python dependencies
 │   ├── config.py          # Centralized configuration
 │   ├── etl/               # Data extraction & cleaning
 │   ├── features/          # Feature engineering
 │   ├── models/            # Model training & prediction
-│   ├── ablation/          # Ablation experiments
 │   ├── utils/             # Shared utilities
-│   ├── tests/             # Test suite
-│   └── kaggle/            # Kaggle submission
+│   └── tests/             # Test suite
+├── config/                # Kaggle tokens & env config (not in git)
 ├── data/                  # Dataset files (not in git)
 ├── docs/                  # Documentation
 │   ├── changelog/         # Progress logs and experiment reports
 │   ├── designs/           # Architecture and design documents
 │   └── specification/     # Project requirements
-├── tech_dashboard.html    # Real-time project status dashboard
-└── website/               # Presentation website
+├── output/                # Kaggle submissions (top 20 by score)
+│   └── archive/           # Archived older submissions
+└── tech_dashboard.html    # Real-time project status dashboard
 ```
 
 ## Quick Start
@@ -38,11 +39,10 @@ This project builds a prediction system for review ratings using PySpark for dis
 # Install dependencies
 pip install -r code/requirements.txt
 
-# Run full pipeline
-bash code/run.sh all
-
-# See all options
-bash code/run.sh --help
+# Run individual stages
+python -m code.etl.main          # ETL pipeline
+python -m code.features.main     # Feature engineering
+python -m code.models.train      # Model training
 ```
 
 ## Dataset

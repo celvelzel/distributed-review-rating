@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from torch.amp import autocast
+from sklearn.model_selection import KFold
 
 ROOT = "/hpc/puhome/25116696g/COMP5434_BDC/distributed-review-rating"
 MODEL_DIR = os.path.join(ROOT, "artifacts", "models")
@@ -84,6 +85,11 @@ def main():
     tr_tt = torch.from_numpy(td["token_type_ids"]).to(torch.int32)
     train_ds = DS(tr_ids, tr_mask, tr_tt)
 
+    # Rebuild fold splits (same as training: KFold(n_splits=3, shuffle=True, random_state=42))
+    n_samples = len(y_train)
+    kf = KFold(n_splits=3, shuffle=True, random_state=42)
+    fold_splits = list(kf.split(np.arange(n_samples)))
+
     # Find best checkpoints (highest epoch for each fold)
     ckpts = sorted(os.listdir(CKPT_DIR))
     best_ckpts = {}
@@ -98,7 +104,8 @@ def main():
     print(f"\nBest checkpoints per fold: {best_ckpts}", flush=True)
 
     test_preds_list = []
-    oof_rmse_list = []
+    oof_preds_all = np.zeros(n_samples, dtype=np.float32)
+    oof_counts = np.zeros(n_samples, dtype=np.int32)
 
     for fold, epoch in sorted(best_ckpts.items()):
         ckpt_path = os.path.join(CKPT_DIR, f"fold{fold}_epoch{epoch}.pt")
@@ -113,23 +120,36 @@ def main():
         print(f"  Test: mean={test_preds.mean():.4f}, std={test_preds.std():.4f}", flush=True)
         test_preds_list.append(test_preds)
 
-        # OOF predictions
-        oof_preds = np.clip(predict(model, train_ds, bs=128), 1.0, 5.0)
-        oof_rmse = np.sqrt(np.mean((oof_preds - y_train)**2))
-        print(f"  OOF RMSE: {oof_rmse:.5f}", flush=True)
-        oof_rmse_list.append(oof_rmse)
+        # True OOF: only predict on this fold's validation indices
+        fold_idx = fold - 1  # fold is 1-indexed
+        _, va_idx = fold_splits[fold_idx]
+        va_ds = DS(tr_ids[va_idx], tr_mask[va_idx], tr_tt[va_idx])
+        va_oof = np.clip(predict(model, va_ds, bs=128), 1.0, 5.0)
+        oof_preds_all[va_idx] += va_oof
+        oof_counts[va_idx] += 1
+
+        oof_rmse = np.sqrt(np.mean((va_oof - y_train[va_idx])**2))
+        print(f"  OOF RMSE (fold val): {oof_rmse:.5f}  (n_val={len(va_idx)})", flush=True)
 
         np.save(os.path.join(MODEL_DIR, f"deberta_base_fold{fold}_test.npy"), test_preds)
-        np.save(os.path.join(MODEL_DIR, f"deberta_base_fold{fold}_oof.npy"), oof_preds)
+        np.save(os.path.join(MODEL_DIR, f"deberta_base_fold{fold}_oof.npy"), va_oof)
 
         del model; torch.cuda.empty_cache()
 
-    # Average all folds
-    avg_test = np.clip(np.mean(test_preds_list, axis=0), 1.0, 5.0)
-    avg_oof = np.mean(oof_rmse_list)
+    # Verify all samples covered exactly once
+    assert oof_counts.min() == 1 and oof_counts.max() == 1, f"OOF coverage error: min={oof_counts.min()}, max={oof_counts.max()}"
+
+    # True OOF RMSE
+    true_oof_rmse = np.sqrt(np.mean((oof_preds_all - y_train)**2))
     print(f"\n{'='*60}", flush=True)
-    print(f"Average OOF RMSE: {avg_oof:.5f}", flush=True)
+    print(f"True OOF RMSE: {true_oof_rmse:.5f}", flush=True)
+
+    # Average test predictions
+    avg_test = np.clip(np.mean(test_preds_list, axis=0), 1.0, 5.0)
     print(f"Average Test: mean={avg_test.mean():.4f}, std={avg_test.std():.4f}", flush=True)
+
+    # Save full OOF
+    np.save(os.path.join(MODEL_DIR, "deberta_base_oof.npy"), oof_preds_all)
 
     # Variance expansion
     target_std = y_train.std()

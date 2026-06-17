@@ -349,28 +349,29 @@
       <div class="metrics-grid">
         <div class="metric-card">
           <div class="metric-label">DeBERTa-v3-base (FULL 3M)</div>
-          <div class="metric-value" style="font-size: 16px;">Fold 3/3</div>
-          <div class="metric-status">Epoch 2 训练中 — 100 steps/s</div>
+          <div class="metric-value" style="font-size: 16px; color: var(--green);">✅ 3/3 完成</div>
+          <div class="metric-status">3f×3e, fold2 e3 补训完成</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Checkpoints</div>
-          <div class="metric-value" style="font-size: 16px;">6 saved</div>
-          <div class="metric-status">fold1_e1-e3, fold2_e1-e2, fold3_e1</div>
+          <div class="metric-label">DeBERTa-v3-large (FULL 3M)</div>
+          <div class="metric-value" style="font-size: 16px;">Fold 1 Ep 2 🔄</div>
+          <div class="metric-status">435M params, BS=16, ~8.2h/epoch</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">⚠️ 新预测问题</div>
-          <div class="metric-value" style="font-size: 14px; color: var(--red);">Kaggle 0.69</div>
-          <div class="metric-status">新 fold1 vs 旧 fold1: 0.69 vs 0.617</div>
+          <div class="metric-label">Base Val RMSE</div>
+          <div class="metric-value" style="font-size: 18px; color: var(--green);">1.136</div>
+          <div class="metric-status">fold1:1.139 fold2:1.136 fold3:1.137</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">ETA 完成</div>
-          <div class="metric-value" style="font-size: 18px;">~2.5h</div>
-          <div class="metric-status">Fold3 ep2+ep3 剩余</div>
+          <div class="metric-label">v3-large ETA</div>
+          <div class="metric-value" style="font-size: 18px;">~2.9天</div>
+          <div class="metric-status">fold1 e1 done → 8 epochs left</div>
         </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
-        <p><strong>配置:</strong> LoRA r=16 α=32, CORAL+R-Drop, BS=32, GradAcc=8, FP16</p>
-        <p><strong>⚠️ 关键发现:</strong> Full 3M 训练的 fold1 预测 (std=0.812) Kaggle=0.69，远差于旧 1M 训练 (std=0.825) Kaggle=0.617。需要调查原因。</p>
+        <p><strong>Base 完整训练:</strong> 3f×3e 全部完成。fold2 e3 补训 val_rmse=1.13551 (best across all folds)。所有 fold 收敛到 1.136-1.139。</p>
+        <p><strong>Large 训练:</strong> fold1 e1 val_rmse=1.17868, fold1 e2 训练中。435M params, LoRA r=16, BS=16, GradAcc=16, FP16</p>
+        <p><strong>GPU:</strong> 10.5GB / 12.6GB (83%) — 正常运行</p>
         <p><strong>旧预测仍可用:</strong> deberta_lora_fold1_test.npy (June 13) 精确匹配 0.61734 提交</p>
       </div>
     </div>
@@ -503,7 +504,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-16 22:00</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-17 12:30</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

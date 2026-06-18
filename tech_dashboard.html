@@ -442,23 +442,33 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">⚠️</span>
-        <span>风险与挑战</span>
+        <span>风险与挑战 (更新于 6/17 16:00)</span>
       </div>
       <div class="risks">
         <div class="risk-item critical">
+          <div class="risk-title"><span>🔴</span><span>XGBoost Pipeline 完全不可用</span></div>
+          <div class="risk-desc">所有模型预测文件已丢失 (artifacts/models/ 为空)。xgboost_full.py、blend_expanded_ridge.py、submit_3m_3x3_ve_xgb.py 均因缺少依赖文件而无法运行。详见 docs/changelog/2026-06-17-xgboost-bug-report.md</div>
+          <div class="risk-plan">需要重新生成 DeBERTa fold1 预测 + 修复 XGBoost 校准 + 重新 blend</div>
+        </div>
+        <div class="risk-item critical">
+          <div class="risk-title"><span>🔴</span><span>XGBoost 预测严重失校准</span></div>
+          <div class="risk-desc">XGBoost predictions mean=3.26 (应为3.94), std=1.58 (应为1.42)。Blend 后拉低整体预测, Kaggle 从 0.617 退步到 0.763 (+23.6%)</div>
+          <div class="risk-plan">添加 post-prediction 校准: (pred - mean) / std * target_std + target_mean</div>
+        </div>
+        <div class="risk-item critical">
           <div class="risk-title"><span>🔴</span><span>新训练预测比旧训练差！</span></div>
-          <div="risk-desc">Full 3M 训练的 fold1 预测 (std=0.812) Kaggle=0.69 vs 旧 1M 训练 (std=0.825) Kaggle=0.617。需要调查原因。</div>
+          <div class="risk-desc">Full 3M 训练的 fold1 预测 (std=0.812) Kaggle=0.69 vs 旧 1M 训练 (std=0.825) Kaggle=0.617。</div>
           <div class="risk-plan">可能原因: KFold 种子不同、训练数据差异、或模型未充分收敛</div>
         </div>
         <div class="risk-item critical">
-          <div class="risk-title"><span>🔴</span><span>差距 19% 仍然很大</span></div>
-          <div class="risk-desc">0.617 → 0.500 需要 ~19% 改进。单靠方差扩展和集成无法达到。</div>
-          <div class="risk-plan">需要更大模型 (DeBERTa-v3-large 304M) 或全新架构</div>
+          <div class="risk-title"><span>🔴</span><span>差距 30% 仍然巨大</span></div>
+          <div class="risk-desc">我们 0.617 vs 第2名 Deepsick 0.474, 差距 0.144 (30.3%)。目标 0.500 也需要 ~19% 改进。</div>
+          <div class="risk-plan">需要 DeBERTa-v3-large (304M) + pseudo-labeling + 多模型 ensemble</div>
         </div>
         <div class="risk-item">
           <div class="risk-title"><span>🟡</span><span>每日提交限制 10 次</span></div>
-          <div class="risk-desc">今天 10/10 已用完。需要更谨慎地选择提交。</div>
-          <div class="risk-plan">优先提交最有希望的预测，避免浪费</div>
+          <div class="risk-desc">需要更谨慎地选择提交, 避免浪费在未验证的方案上。</div>
+          <div class="risk-plan">优先提交最有希望的预测, 每次提交前验证分布</div>
         </div>
       </div>
     </div>
@@ -467,44 +477,43 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">🎯</span>
-        <span>优化路线图 (更新于 6/16 22:00)</span>
+        <span>优化路线图 (更新于 6/17 16:00)</span>
       </div>
       <div style="font-size: 14px; color: var(--text-muted);">
-        <p><strong>Track A — DeBERTa-v3-base 全量测试 (HPC, 优先):</strong></p>
+        <p><strong>P0 — 修复 XGBoost Pipeline (立即):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>🔴 调查为什么 full 3M 训练的 fold1 (0.69) 远差于旧 1M 训练 (0.617)</li>
-          <li>完成 fold2/fold3 训练, 生成 3-fold OOF 预测</li>
-          <li>用旧 fold1 预测 + 新 fold2/3 预测进行 OOF 集成</li>
-          <li>方差扩展 + Ridge blend, 提交 Kaggle 验证</li>
-          <li><strong>目标: 用 base 模型建立可靠的 Kaggle 基线</strong></li>
+          <li>🔴 修复 hardcoded HPC path (submit_3m_3x3_ve_xgb.py:26)</li>
+          <li>🔴 恢复 DeBERTa fold1 预测文件 (需要 checkpoint 或重新推理)</li>
+          <li>🔴 修复 XGBoost 预测校准 (mean=3.26 → 3.94, std=1.58 → 1.42)</li>
+          <li>🔴 重新 blend DeBERTa VE + calibrated XGBoost, 提交验证</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Track B — DeBERTa-v3-large (HPC, Track A 完成后启动):</strong></p>
+        <p style="margin-top: 12px;"><strong>Track A — DeBERTa-v3-large (HPC, ~3天):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>304M 参数, LoRA r=16, 预计 ~2.5GB VRAM, 可放入 RTX 3080 Ti</li>
-          <li>3f x 3e 训练, ~3.4h/epoch, 总计 ~30h</li>
+          <li>304M 参数, LoRA r=16, 训练中 (~8.2h/epoch)</li>
+          <li>3f x 3e 训练, 总计 ~74h</li>
           <li>目标: Kaggle 0.58-0.60</li>
-          <li>Kaggle 分数回测, 与 Track A 对比</li>
+          <li>完成后与 base 模型 ensemble</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Track C — 图特征拓展 (本地/并行):</strong></p>
+        <p style="margin-top: 12px;"><strong>Track B — 图特征 + XGBoost (修复后):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>✅ Phase 1: 扩展图特征计算完成 (OOF 0.6478, -19.8%)</li>
-          <li>🟡 在 HPC 上加载 DeBERTa fold1 预测, blend 扩展特征 Ridge</li>
-          <li>🟡 可选: sentiment 特征 (17d, 需 nltk/textblob)</li>
-          <li><strong>目标: 用 Kaggle 分数验证图特征是否有效</strong></li>
+          <li>✅ Phase 1: 扩展图特征计算完成 (OOF 0.5304 XGBoost, 0.6478 Ridge)</li>
+          <li>🔴 Phase 2: 修复后重新运行 XGBoost + 校准 + blend</li>
+          <li>🟡 可选: LightGBM (50k sample OOF=0.5592)</li>
+          <li><strong>目标: 用 calibrated XGBoost blend 改善 Kaggle 分数</strong></li>
         </ul>
-        <p style="margin-top: 12px;"><strong>合并策略 (Kaggle 分数回测):</strong></p>
+        <p style="margin-top: 12px;"><strong>Track C — Pseudo-labeling + Ensemble (中长期):</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>每个 Track 产出独立的 Kaggle 提交</li>
-          <li>用 Kaggle RMSE 作为最终评判标准 (不依赖 OOF)</li>
-          <li>最佳 Track 的 VE + 扩展特征 Ridge 进行最终 blend</li>
-          <li>伪标签 + 多模型集成基于最佳 Track 的预测</li>
+          <li>用最佳预测对测试集做 pseudo-labeling</li>
+          <li>多模型 ensemble: DeBERTa-base + DeBERTa-large + XGBoost</li>
+          <li>OOF-aligned Ridge stacking</li>
+          <li><strong>目标: Kaggle < 0.55</strong></li>
         </ul>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-17 12:30</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-17 16:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

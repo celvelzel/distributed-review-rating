@@ -1,8 +1,8 @@
 {
   "project": "COMP5434 Review Rating Prediction",
-  "last_updated": "2026-06-09T21:30:00",
-  "best_kaggle_score": 0.79012,
-  "competitor_score": 0.62,
+  "last_updated": "2026-06-17T13:30:00",
+  "best_kaggle_score": 0.61734,
+  "competitor_score": 0.47361,
   "improvement_plan": {
     "phase_1": {
       "name": "TF-IDF Enhancement",
@@ -119,18 +119,23 @@
     }
   },
   "kaggle_submissions": [
-    {"file": "submission-tfidf-regularized.csv", "score": 0.79012, "date": "2026-06-06", "note": "Best model"},
-    {"file": "submission-blend_80_20.csv", "score": 0.79142, "date": "2026-06-07", "note": "Blend 80% best + 20% stage0"},
-    {"file": "submission-clip_1_5_round.csv", "score": 0.79281, "date": "2026-06-07", "note": "Rounded to nearest 0.5"},
-    {"file": "stage0_submission.csv", "score": 0.80107, "date": "2026-06-06", "note": "Baseline"},
-    {"file": "submission-stage0-repro.csv", "score": 0.80109, "date": "2026-06-06", "note": "Baseline reproduction"},
-    {"file": "submission-ensemble-weighted.csv", "score": 0.80276, "date": "2026-06-07", "note": "Weighted ensemble"},
-    {"file": "submission-ensemble.csv", "score": 0.80706, "date": "2026-06-07", "note": "Equal weight ensemble"},
-    {"file": "submission-optimized-v1.csv", "score": 0.84339, "date": "2026-06-06", "note": "TF-IDF + leakage-free features (worse)"},
-    {"file": "submission-tfidf-v2.csv", "score": 0.86572, "date": "2026-06-06", "note": "50K subsample (worse)"},
-    {"file": "submission-lgb-kfold-final.csv", "score": 1.18779, "date": "2026-06-06", "note": "K-Fold features (leakage)"},
-    {"file": "submission-260606-stage2.csv", "score": 1.31628, "date": "2026-06-06", "note": "Multimodal (leakage)"},
-    {"file": "submission-260606-stage1.csv", "score": 1.59341, "date": "2026-06-06", "note": "Stats features (leakage)"}
+    {"file": "submission-dve90-r10.csv", "score": 0.61734, "date": "2026-06-14", "note": "BEST: 1M DeBERTa VE 90% + Stacking 10%"},
+    {"file": "submission-dve95-r5.csv", "score": 0.62463, "date": "2026-06-14", "note": "1M DeBERTa VE 95% + Stacking 5%"},
+    {"file": "submission-deberta-ve.csv", "score": 0.63287, "date": "2026-06-14", "note": "DeBERTa VE alone"},
+    {"file": "submission-base_ve_90_small_ve_10.csv", "score": 0.63449, "date": "2026-06-16", "note": "base VE 90% + small VE 10%"},
+    {"file": "submission-base_ve_85_small_ve_15.csv", "score": 0.63559, "date": "2026-06-16", "note": "base VE 85% + small VE 15%"},
+    {"file": "submission-base_ve_80_small_ve_20.csv", "score": 0.63689, "date": "2026-06-16", "note": "base VE 80% + small VE 20%"},
+    {"file": "submission-deberta_90_ridge_10.csv", "score": 0.63832, "date": "2026-06-13", "note": "DeBERTa raw 90% + Ridge 10%"},
+    {"file": "submission-deberta-lora-fold1.csv", "score": 0.63842, "date": "2026-06-13", "note": "DeBERTa LoRA fold 1"},
+    {"file": "submission-small_ve_ridge10_base10.csv", "score": 0.64520, "date": "2026-06-15", "note": "small VE + Ridge + base"},
+    {"file": "submission-stacking-best.csv", "score": 0.66376, "date": "2026-06-13", "note": "Ridge stacking 6 models"},
+    {"file": "submission-small_ve_base5.csv", "score": 0.67265, "date": "2026-06-15", "note": "small VE + base 5%"},
+    {"file": "deberta3m_ve90_stacking10.csv", "score": 0.68126, "date": "2026-06-17", "note": "3M 3f×3e VE 90% + Stacking 10%"},
+    {"file": "submission-3m-f1e3-ve90-r10.csv", "score": 0.68608, "date": "2026-06-17", "note": "3M fold1 epoch3 VE 90% + Stacking 10%"},
+    {"file": "submission-f1ve92_r8.csv", "score": 0.69065, "date": "2026-06-16", "note": "fold1 VE 92% + Ridge 8%"},
+    {"file": "submission-3m-f1e1-ve90-r10.csv", "score": 0.71179, "date": "2026-06-17", "note": "3M fold1 epoch1 VE 90% + Stacking 10%"},
+    {"file": "deberta3m_ve90_ridge10.csv", "score": 0.76285, "date": "2026-06-17", "note": "3M VE 90% + XGBoost (miscalibrated)"},
+    {"file": "candidate-3m-3x3-ve45-xgb55-oof0p8984.csv", "score": 1.47221, "date": "2026-06-17", "note": "3M VE 45% + XGBoost 55% (failed)"}
   ],
   "experiments_tried": [
     "TF-IDF features (5K, 8K, 10K, 15K, 20K)",
@@ -153,7 +158,10 @@
     "More TF-IDF features (10K+) may help but training is slow",
     "Different clipping ranges may improve score",
     "MLP with frozen DeBERTa + LightGCN embeddings performed poorly (OOF=1.152)",
-    "Character-level TF-IDF (char_wb ngrams) has not been tried yet"
+    "Character-level TF-IDF (char_wb ngrams) has not been tried yet",
+    "Variance expansion (VE) is critical for DeBERTa predictions — fixes compressed std",
+    "3M DeBERTa overfits worse than 1M (0.681 vs 0.617 Kaggle RMSE)",
+    "stacking_v2_test.npy is auto-selected best of Ridge/LGB/blend, not pure Ridge"
   ],
   "ablations": {
     "a_no_text": {"rmse": null, "delta_vs_full": null},

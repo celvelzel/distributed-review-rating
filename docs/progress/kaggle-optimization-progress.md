@@ -414,4 +414,41 @@ The saved `stacking_v2_test.npy` is whichever had lowest OOF RMSE. The variable 
 
 ---
 
-*Report updated: 2026-06-17*
+## 2026-06-18: Stacking V3 Ablation Study
+
+### Purpose
+
+Isolate the contribution of Stacking V3 improvements vs V2 baseline.
+
+### Ablation Design
+
+| ID | File | Description | Meta-Learner | Base Models |
+|----|------|-------------|--------------|-------------|
+| A1 | ablation-v2-ridge.csv | Baseline: V2 config | Ridge α=1.0 | 7 (original) |
+| A2 | ablation-v3-ridge.csv | + Graph features | Ridge α=1.0 | 9 (+xgb_graph, +lgb_graph) |
+| A3 | ablation-v3-ridge-lgb.csv | + Ridge+LGB ensemble | Ridge+LGB (grid search) | 9 |
+
+### Results
+
+| ID | Kaggle RMSE | vs Baseline | Δ |
+|----|-------------|-------------|---|
+| A1 (v2-ridge) | **0.61734** | — | — |
+| A2 (v3-ridge) | 0.61746 | +0.00012 | Graph features slightly hurt |
+| A3 (v3-ridge-lgb) | **0.61725** | -0.00009 | Ridge+LGB marginally better |
+
+### Key Findings
+
+1. **Graph features (xgb_graph_safe, lgb_graph_safe) have negligible impact** — +0.00012 RMSE degradation is within noise
+2. **Ridge+LGB meta-learner is marginally better** — -0.00009 RMSE improvement, not significant
+3. **V3 ablations are extremely close to V2 baseline** — all within ±0.0002 RMSE
+4. **Conclusion**: Stacking V3 improvements are marginal; current bottleneck is DeBERTa base model quality, not meta-learner
+
+### Implications
+
+- Graph features add complexity without meaningful gain → consider removing to simplify pipeline
+- Ridge+LGB ensemble is safe to keep (no regression) but don't expect breakthroughs
+- **Next priority**: Improve DeBERTa base model (better fine-tuning, larger model, or better VE strategy)
+
+---
+
+*Report updated: 2026-06-18*

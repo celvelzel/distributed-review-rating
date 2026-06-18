@@ -1,22 +1,24 @@
 # Kaggle Review Rating Optimization — Progress Report
 
-**Date**: 2026-06-13  
-**Plan**: `.sisyphus/plans/kaggle-optimization-qwen.md`  
+**Date**: 2026-06-18  
 **Baseline**: Kaggle RMSE = 0.699 (BestKaggle = 0.79012)  
 **Current Best**: Kaggle RMSE = 0.61734 (DeBERTa 1M VE 90% + Stacking 10%)
-**Target**: Kaggle RMSE = 0.5
+**Target**: 超过第2名 Deepsick (Kaggle RMSE < 0.47361)
 
 ---
 
 ## Executive Summary
 
-执行 Kaggle 优化计划的 3 波任务。Wave 1（特征工程）和 Wave 2（模型训练）已基本完成。当前状态：
+执行 Kaggle 优化计划。当前状态：
 
-| Wave | Tasks | Status | Key Results |
-|------|-------|--------|-------------|
-| Wave 1: 特征工程 | T1-T5 | ✅ 全部完成 | 6 个新特征集生成 |
-| Wave 2: 模型训练 | T6-T9 | 🔄 2/4 完成 | T8 RMSE=1.24, T9 RMSE=1.39 |
-| Wave 3: Stacking | T10-T11 | ⏳ 待开始 | 等待 T6/T7 完成 |
+| 阶段 | 状态 | 关键结果 |
+|------|------|----------|
+| Wave 1: 特征工程 | ✅ 完成 | 6 个新特征集，图特征已验证无效 |
+| Wave 2: 模型训练 | ✅ 完成 | DeBERTa-base 3f×3e, Large 训练中 |
+| Wave 3: Stacking | ✅ 完成 | V3 OOF=1.118 (vs V2 1.128) |
+| 消融实验 | ✅ 完成 | Graph features 无效，meta-learner 升级无效 |
+
+**关键发现**: 当前瓶颈是 DeBERTa 模型质量，不是 meta-learner 复杂度。
 
 ---
 

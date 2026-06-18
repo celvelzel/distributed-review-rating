@@ -195,8 +195,8 @@
       <div class="metrics-grid">
         <div class="metric-card">
           <div class="metric-label">当前最佳</div>
-          <div class="metric-value" style="color: var(--green);">0.61734</div>
-          <div class="metric-status">🏆 DeBERTa VE 90% + Ridge 10%</div>
+          <div class="metric-value" style="color: var(--green);">0.61725</div>
+          <div class="metric-status">🏆 1M VE 90% + Stacking V3 10%</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">基线</div>
@@ -225,19 +225,27 @@
           <tbody>
             <tr>
               <td>1</td>
-              <td>ablation-v3-ridge-lgb.csv</td>
+              <td>submission-deb1m-ve90-sv3-10.csv</td>
               <td class="score-best">0.61725</td>
-              <td>6/18</td>
-              <td><code>stacking_v3.py</code></td>
-              <td>🏆 V3 Stacking: 9 base models (含 graph features) + Ridge+LGB meta-learner (grid search blend)</td>
+              <td>6/18 15:24</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
+              <td>🏆 1M VE 90% + Stacking V3 (ridge+lgb) 10% — NEW BEST</td>
             </tr>
             <tr>
               <td>2</td>
+              <td>ablation-v3-ridge-lgb.csv</td>
+              <td class="score-best">0.61725</td>
+              <td>6/18 12:07</td>
+              <td><code>stacking_v3.py</code></td>
+              <td>V3 Stacking: 9 base models + Ridge+LGB meta-learner</td>
+            </tr>
+            <tr>
+              <td>3</td>
               <td>ablation-v2-ridge.csv / dve90-r10.csv</td>
-              <td class="score-best">0.61734</td>
+              <td>0.61734</td>
               <td>6/14</td>
               <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
-              <td>🏆 DeBERTa-v3-base LoRA fold1 (1M subsample) → Variance Expansion 90% + Ridge Stacking 10%</td>
+              <td>DeBERTa VE 90% + Ridge Stacking 10% (旧最佳)</td>
             </tr>
             <tr>
               <td>3</td>
@@ -459,28 +467,24 @@
           <div class="metric-status">1f×3e, Kaggle=0.61734</div>
         </div>
         <div class="metric-card">
+          <div class="metric-label">DeBERTa-v3-base (1M Fair)</div>
+          <div class="metric-value" style="font-size: 16px; color: var(--yellow);">🔄 训练中</div>
+          <div class="metric-status">3f×3e, Fold1 Ep1 进行中</div>
+        </div>
+        <div class="metric-card">
           <div class="metric-label">DeBERTa-v3-base (3M)</div>
           <div class="metric-value" style="font-size: 16px; color: var(--green);">✅ 完成</div>
-          <div class="metric-status">3f×3e, Kaggle=0.681, OOF bug</div>
+          <div class="metric-status">3f×3e, Kaggle=0.681, OOF bug已修复</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">DeBERTa-v3-large (3M)</div>
           <div class="metric-value" style="font-size: 16px; color: var(--yellow);">⏸️ 暂停</div>
           <div class="metric-status">1f×2e, val_rmse=1.160, LR需提高</div>
         </div>
-        <div class="metric-card">
-          <div class="metric-label">3M BS16 Ablation</div>
-          <div class="metric-value" style="font-size: 16px; color: var(--red);">❌ 失败</div>
-          <div class="metric-status">Kaggle=0.74265, 过拟合严重</div>
-        </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
-        <p><strong>关键结论:</strong></p>
-        <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>1M 模型是最佳选择 (Kaggle 0.61734)</li>
-          <li>3M 模型过拟合严重，BS 配置无法拯救</li>
-          <li>Large 模型需要提高 LR (1e-5 → 2e-5) 后重新训练</li>
-        </ul>
+        <p><strong>公平对比实验进行中:</strong> 1M 数据 + 3f×3e 配置，用于验证 3M 数据是否真的有害</p>
+        <p><strong>3M OOF 已修复:</strong> Overall OOF RMSE = 1.13701 (fold1:1.139, fold2:1.136, fold3:1.137)</p>
       </div>
     </div>
 
@@ -488,7 +492,7 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">⚠️</span>
-        <span>风险与挑战</span>
+        <span>风险与挑战 (更新于 2026-06-18 23:30)</span>
       </div>
       <div class="risks">
         <div class="risk-item critical">
@@ -496,10 +500,10 @@
           <div class="risk-desc">我们 0.617 vs 第2名 Deepsick 0.474, 差距 0.144 (30.3%)。Stacking V3 消融证明 meta-learner 优化已到极限。</div>
           <div class="risk-plan">需要 DeBERTa-v3-large + pseudo-labeling + 多模型异构集成</div>
         </div>
-        <div class="risk-item critical">
-          <div class="risk-title"><span>🔴</span><span>3M OOF 保存 Bug</span></div>
-          <div class="risk-desc">3M 训练的 OOF 文件只有 1/3 非零 (resume 逻辑导致)。修复脚本已创建: code/models/fix_3m_oof.py</div>
-          <div class="risk-plan">运行 fix_3m_oof.py 从 checkpoint 重新生成 OOF</div>
+        <div class="risk-item">
+          <div class="risk-title"><span>🟡</span><span>公平对比实验进行中</span></div>
+          <div class="risk-desc">1M vs 3M 公平对比实验正在运行，用于验证 3M 数据是否真的有害。结果将指导后续策略。</div>
+          <div class="risk-plan">预计 2026-06-19 10:00 完成</div>
         </div>
         <div class="risk-item">
           <div class="risk-title"><span>🟡</span><span>DeBERTa-v3-large 训练暂停</span></div>
@@ -518,17 +522,25 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">🎯</span>
-        <span>优化路线图</span>
+        <span>优化路线图 (更新于 2026-06-18 23:30)</span>
       </div>
       <div style="font-size: 14px; color: var(--text-muted);">
-        <p><strong>P0 — 立即:</strong></p>
+        <p><strong>🔬 正在进行的实验:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>🔄 1M vs 3M 公平对比实验 (1M 数据 + 3f×3e 配置)</li>
+          <li>目的: 验证 3M 数据是否真的有害 (控制训练配置变量)</li>
+          <li>预计完成: 2026-06-19 10:00</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>P0 — 立即:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
           <li>✅ 已确认旧预测可精确复现 0.61734</li>
           <li>✅ 已确认 3M 过拟合 (H2 确认)</li>
-          <li>🔄 修复 3M OOF bug (fix_3m_oof.py 已创建)</li>
+          <li>✅ 修复 3M OOF bug (Overall OOF RMSE = 1.13701)</li>
+          <li>✅ 新最佳 Kaggle 0.61725 (VE90% + Stacking V3 10%)</li>
         </ul>
         <p style="margin-top: 12px;"><strong>Track A — DeBERTa 模型改进:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>等待 1M fair comparison 结果</li>
           <li>DeBERTa-v3-large: 提高 LR 到 2e-5，重新训练</li>
           <li>多折集成: 用 3 折预测的加权平均</li>
           <li>伪标签: 用高置信度预测扩充训练集</li>
@@ -544,7 +556,7 @@
         <ul style="margin-left: 20px; margin-top: 4px;">
           <li>❌ 3M 数据增加 → 过拟合更严重</li>
           <li>❌ Graph features → 无显著影响</li>
-          <li>❌ Ridge+LGB meta-learner → 边际改进</li>
+          <li>❌ Ridge+LGB meta-learner → 边际改进 (-0.00009)</li>
           <li>❌ BS=16×16 配置 → 无法拯救 3M</li>
         </ul>
       </div>
@@ -552,11 +564,7 @@
   </div>
 
   <footer>
-<<<<<<< HEAD
-    <p>最后更新：<span class="timestamp">2026-06-18 21:30</span></p>
-=======
-    <p>最后更新：<span class="timestamp">2026-06-18 13:50</span></p>
->>>>>>> d0e0f0b (docs: update tech dashboard with top 10 Kaggle submissions detail)
+    <p>最后更新：<span class="timestamp">2026-06-18 23:30</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

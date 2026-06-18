@@ -23,7 +23,7 @@ LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.05
 LORA_TARGET = ["query_proj", "value_proj"]
 N_CLASSES, N_TASKS = 5, 4
 N_FOLDS, N_EPOCHS = 3, 3
-BATCH_SIZE = 64
+BATCH_SIZE = 256
 FP16 = True
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -87,15 +87,18 @@ def main():
     y_train = np.load(os.path.join(FEAT_DIR, "y_train.npy")).astype(np.float32)
 
     print(f"Train: {input_ids.shape}", flush=True)
+    print(f"y_train: {y_train.shape}", flush=True)
 
     # Initialize OOF array
     oof = np.zeros(len(y_train), dtype=np.float32)
     fold_rmses = []
 
     # Process each fold
+    print("Creating KFold split...", flush=True)
     kf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
     for fi, (tr_idx, va_idx) in enumerate(kf.split(input_ids), 1):
         print(f"\n{'='*60}\nFold {fi}/{N_FOLDS}\n{'='*60}", flush=True)
+        print(f"Val indices: {len(va_idx)} samples", flush=True)
 
         # Load best checkpoint for this fold (epoch 3 or last available)
         best_ckpt_path = os.path.join(CKPT_DIR, f"fold{fi}_epoch{N_EPOCHS}.pt")
@@ -109,14 +112,19 @@ def main():
 
         print(f"Loading checkpoint: {best_ckpt_path}", flush=True)
         ckpt = torch.load(best_ckpt_path, map_location="cpu", weights_only=False)
+        print(f"Checkpoint loaded. Keys: {list(ckpt.keys())}", flush=True)
 
         # Create model and load state
+        print("Creating model...", flush=True)
         model = DeBERTaLoRA().to(DEVICE)
+        print(f"Loading state dict...", flush=True)
         model.load_state_dict(ckpt["model_state_dict"])
         print(f"GPU: {torch.cuda.memory_allocated()/1e9:.2f}GB", flush=True)
 
         # Create validation dataset
+        print(f"Creating validation dataset...", flush=True)
         val_ds = DS(input_ids, attn_mask, ttids, torch.from_numpy(y_train), idx=va_idx)
+        print(f"Val dataset size: {len(val_ds)}", flush=True)
 
         # Generate OOF predictions for this fold
         print(f"Generating OOF predictions for fold {fi}...", flush=True)

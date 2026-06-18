@@ -217,26 +217,117 @@
 
       <!-- Submission History Table -->
       <div style="margin-top: 20px;">
-        <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">Kaggle 提交记录 (按分数排序)</div>
+        <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">Kaggle 提交排行榜 (Top 10 by Score) — 更新于 2026-06-18</div>
         <table>
           <thead>
-            <tr><th>提交</th><th>分数</th><th>说明</th><th>日期</th></tr>
+            <tr><th>#</th><th>文件名</th><th>RMSE</th><th>日期</th><th>生成脚本</th><th>详细说明</th></tr>
           </thead>
           <tbody>
-            <tr><td>dve90-r10</td><td class="score-best">0.61734</td><td>🏆 DeBERTa (OLD fold1) VE 90% + Ridge 10%</td><td>Jun 15</td></tr>
-            <tr><td>ablation-v3-ridge-lgb</td><td class="score-best">0.61725</td><td>✅ A3: V3 Ridge+LGB (微改进)</td><td>Jun 18</td></tr>
-            <tr><td>ablation-v2-ridge</td><td>0.61734</td><td>✅ A1: baseline 复现</td><td>Jun 18</td></tr>
-            <tr><td>ablation-v3-ridge</td><td>0.61746</td><td>✅ A2: V3 Ridge (graph features)</td><td>Jun 18</td></tr>
-            <tr><td>dve95-r5</td><td>0.62463</td><td>DeBERTa VE 95% + Ridge 5%</td><td>Jun 15</td></tr>
-            <tr><td>deberta-ve</td><td>0.63287</td><td>DeBERTa VE alone</td><td>Jun 15</td></tr>
-            <tr><td>base_ve_90_small_ve_10</td><td>0.63449</td><td>base VE 90% + small VE 10%</td><td>Jun 16</td></tr>
-            <tr><td>stacking-v2</td><td>0.66376</td><td>Ridge stacking (6 models)</td><td>Jun 14</td></tr>
-            <tr><td>deberta3m_ve90_stacking10</td><td>0.68126</td><td>3M 3f×3e avg VE 90% + Stacking 10%</td><td>Jun 17</td></tr>
-            <tr><td>optuna-ensemble</td><td>0.70168</td><td>Optuna ensemble</td><td>Jun 14</td></tr>
-            <tr><td>submission-final</td><td>0.69931</td><td>原始 ensemble 基线</td><td>Jun 14</td></tr>
-            <tr><td>3m-bs16-ablation</td><td class="score-bad">0.74265</td><td>❌ 3M BS=16×16 (过拟合严重)</td><td>Jun 18</td></tr>
+            <tr>
+              <td>1</td>
+              <td>ablation-v3-ridge-lgb.csv</td>
+              <td class="score-best">0.61725</td>
+              <td>6/18</td>
+              <td><code>stacking_v3.py</code></td>
+              <td>🏆 V3 Stacking: 9 base models (含 graph features) + Ridge+LGB meta-learner (grid search blend)</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>ablation-v2-ridge.csv / dve90-r10.csv</td>
+              <td class="score-best">0.61734</td>
+              <td>6/14</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
+              <td>🏆 DeBERTa-v3-base LoRA fold1 (1M subsample) → Variance Expansion 90% + Ridge Stacking 10%</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>ablation-v3-ridge.csv</td>
+              <td>0.61746</td>
+              <td>6/18</td>
+              <td><code>stacking_v3.py</code></td>
+              <td>V3 Stacking: 9 base models (含 graph) + Ridge-only meta-learner (测试 graph features 贡献)</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>dve95-r5.csv</td>
+              <td>0.62463</td>
+              <td>6/14</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
+              <td>DeBERTa VE 95% + Ridge 5% (更激进 VE，但 Ridge 权重过低)</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>deberta-ve.csv</td>
+              <td>0.63287</td>
+              <td>6/14</td>
+              <td><code>deberta_lora_1m.py</code></td>
+              <td>DeBERTa VE alone (无 Ridge blend，纯方差扩展)</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>base_ve_90_small_ve_10.csv</td>
+              <td>0.63449</td>
+              <td>6/16</td>
+              <td><code>deberta_base_full.py</code> + <code>deberta_small_500k.py</code></td>
+              <td>Base 3M VE 90% + Small 500K VE 10% (多模型 VE blend)</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td>base_ve_85_small_ve_15.csv</td>
+              <td>0.63559</td>
+              <td>6/16</td>
+              <td><code>deberta_base_full.py</code> + <code>deberta_small_500k.py</code></td>
+              <td>Base VE 85% + Small VE 15% (更多小模型权重)</td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td>base_ve_80_small_ve_20.csv</td>
+              <td>0.63689</td>
+              <td>6/16</td>
+              <td><code>deberta_base_full.py</code> + <code>deberta_small_500k.py</code></td>
+              <td>Base VE 80% + Small VE 20% (进一步增加小模型权重)</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td>deberta_95_ridge_5.csv / draw95-r5.csv</td>
+              <td>0.63830</td>
+              <td>6/14</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
+              <td>DeBERTa raw 95% + Ridge 5% (无 VE，直接用原始预测)</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td>deberta_90_ridge_10.csv / draw90-r10.csv</td>
+              <td>0.63832</td>
+              <td>6/13</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
+              <td>DeBERTa raw 90% + Ridge 10% (无 VE，原始预测 + Ridge blend)</td>
+            </tr>
           </tbody>
         </table>
+        
+        <!-- Source Code Traceability -->
+        <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+          <p><strong>源码追踪 (Source Traceability):</strong></p>
+          <ul style="margin-left: 20px; margin-top: 6px;">
+            <li><code>deberta_lora_1m.py</code> — DeBERTa-v3-base LoRA 微调 (1M subsample, 3f×3e, CORAL loss, R-Drop)</li>
+            <li><code>deberta_base_full.py</code> — DeBERTa-v3-base 全参数微调 (3M data, 3f×3e)</li>
+            <li><code>deberta_small_500k.py</code> — DeBERTa-v3-small 微调 (500K subsample)</li>
+            <li><code>stacking_v2.py</code> — Ridge + LightGBM 元学习器 (6 base models)</li>
+            <li><code>stacking_v3.py</code> — Ridge + LightGBM + CatBoost + ElasticNet 元学习器 (9 base models, 含 graph features)</li>
+            <li><code>deberta_3m_bs16_ablation.py</code> — 3M BS16 消融实验脚本</li>
+          </ul>
+        </div>
+        
+        <!-- Ablation Analysis -->
+        <div style="margin-top: 16px; padding: 14px; background: var(--bg); border-radius: 8px; font-size: 13px;">
+          <p style="color: var(--accent); font-weight: 600;">📊 V3 Ablation 分析 (2026-06-18):</p>
+          <ul style="margin-left: 20px; margin-top: 6px; color: var(--text-muted);">
+            <li>A1 vs A2 (graph features): +0.00012 RMSE → 图特征贡献可忽略</li>
+            <li>A2 vs A3 (Ridge+LGB): -0.00009 RMSE → LGB 元学习器边际改善</li>
+            <li>结论: V3 改进有限，瓶颈在 DeBERTa 基础模型质量</li>
+          </ul>
+        </div>
       </div>
       
       <!-- Ablation Study Results -->
@@ -461,7 +552,11 @@
   </div>
 
   <footer>
+<<<<<<< HEAD
     <p>最后更新：<span class="timestamp">2026-06-18 21:30</span></p>
+=======
+    <p>最后更新：<span class="timestamp">2026-06-18 13:50</span></p>
+>>>>>>> d0e0f0b (docs: update tech dashboard with top 10 Kaggle submissions detail)
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

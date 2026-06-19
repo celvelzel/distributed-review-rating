@@ -318,8 +318,9 @@
         <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
           <p><strong>源码追踪 (Source Traceability):</strong></p>
           <ul style="margin-left: 20px; margin-top: 6px;">
-            <li><code>deberta_lora_1m.py</code> — DeBERTa-v3-base LoRA 微调 (1M subsample, 3f×3e, CORAL loss, R-Drop)</li>
+            <li><code>deberta_lora_1m.py</code> — DeBERTa-v3-base LoRA 微调 (1M subsample, 旧脚本 5f×5e, CORAL loss, R-Drop)</li>
             <li><code>deberta_base_full.py</code> — DeBERTa-v3-base 全参数微调 (3M data, 3f×3e)</li>
+            <li><code>deberta_base_1m_fair.py</code> — 1M 公平对比脚本 (1M data, 3f×3e)</li>
             <li><code>deberta_small_500k.py</code> — DeBERTa-v3-small 微调 (500K subsample)</li>
             <li><code>stacking_v2.py</code> — Ridge + LightGBM 元学习器 (6 base models)</li>
             <li><code>stacking_v3.py</code> — Ridge + LightGBM + CatBoost + ElasticNet 元学习器 (9 base models, 含 graph features)</li>
@@ -349,15 +350,17 @@
             <tr><td>A1</td><td class="score-best">0.61734</td><td>—</td><td>baseline (V2 Ridge)</td><td>—</td></tr>
             <tr><td>A2</td><td>0.61746</td><td>+0.00012</td><td>+ Graph features</td><td>无效</td></tr>
             <tr><td>A3</td><td>0.61725</td><td>-0.00009</td><td>+ Ridge+LGB meta-learner</td><td>边际改进</td></tr>
-            <tr><td>A4</td><td class="score-bad">0.74265</td><td>+0.12531</td><td>3M BS=16×16</td><td>H2 确认</td></tr>
+            <tr><td>A4</td><td class="score-bad">0.74265</td><td>+0.12531</td><td>3M BS=16×16</td><td>BS配置无效</td></tr>
+            <tr><td>A5</td><td class="score-bad">1.53602</td><td>+0.91868</td><td>1M + 3f×3e (公平对比)</td><td>🚨 假设推翻</td></tr>
           </tbody>
         </table>
         <div style="margin-top: 12px; padding: 12px; background: var(--bg); border-radius: 8px; font-size: 13px;">
           <strong>关键发现:</strong>
           <ul style="margin-left: 20px; margin-top: 6px;">
             <li>Stacking V3 改进是边际的 (±0.0002)，瓶颈是 DeBERTa 模型质量</li>
-            <li>3M BS16 消融证实 <strong>H2 (过拟合)</strong> 是 3M 模型差的主因 (0.74265 vs 3M baseline 0.681)</li>
-            <li>1M 模型仍是最优选择，3M 路径应放弃</li>
+            <li>3M BS16 消融证实 BS 配置无法拯救 3M (0.74265 vs 3M baseline 0.681)</li>
+            <li>🚨 <strong>1M fair comparison 推翻假设</strong>: 1M + 3f×3e = Kaggle 1.536，远差于 3M + 3f×3e = 0.681</li>
+            <li><strong>结论: 5f×5e 训练配置是关键，不是数据量</strong></li>
           </ul>
         </div>
       </div>
@@ -375,15 +378,15 @@
             <tr><th>模型</th><th>Config</th><th>Val RMSE</th><th>Kaggle</th><th>状态</th></tr>
           </thead>
           <tbody>
-            <tr><td>DeBERTa-v3-base (1M)</td><td>BS=32×8, 3f×3e</td><td>1.136</td><td class="score-best">0.617</td><td>🏆 最佳</td></tr>
-            <tr><td>DeBERTa-v3-base (3M)</td><td>BS=32×8, 3f×3e</td><td>~1.14*</td><td>0.681</td><td>⚠️ OOF bug</td></tr>
-            <tr><td>DeBERTa-v3-base (3M)</td><td>BS=16×16, 1f×1e</td><td>1.157</td><td class="score-bad">0.743</td><td>❌ 过拟合</td></tr>
+            <tr><td>DeBERTa-v3-base (1M)</td><td>BS=32×8, 1f×3e</td><td>1.117</td><td class="score-best">0.617</td><td>🏆 最佳</td></tr>
+            <tr><td>DeBERTa-v3-base (1M Fair)</td><td>BS=32×8, 3f×3e</td><td>1.298</td><td class="score-bad">1.536</td><td>❌ 失败</td></tr>
+            <tr><td>DeBERTa-v3-base (3M)</td><td>BS=32×8, 3f×3e</td><td>1.137</td><td>0.681</td><td>✅ 完成</td></tr>
+            <tr><td>DeBERTa-v3-base (3M)</td><td>BS=16×16, 1f×1e</td><td>1.157</td><td class="score-bad">0.743</td><td>❌ BS无效</td></tr>
             <tr><td>DeBERTa-v3-large (3M)</td><td>BS=16×16, 1f×2e</td><td>1.160</td><td>—</td><td>⏸️ 暂停</td></tr>
             <tr><td>Ridge Stacking (6模型)</td><td>V2 meta-learner</td><td>1.128</td><td>0.664</td><td>✅ 完成</td></tr>
-            <tr><td>Optuna Ensemble (6模型)</td><td>—</td><td>1.129</td><td>0.702</td><td>✅ 完成</td></tr>
           </tbody>
         </table>
-        <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">* 3M base OOF 有 bug (只有 1/3 非零)，val_rmse 从 checkpoint 记录推断</p>
+        <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">* 1M Old 使用旧脚本 (5f×5e)，1M Fair 使用 deberta_base_full.py (3f×3e)</p>
       </div>
     </div>
 
@@ -394,6 +397,10 @@
         <span>核心发现</span>
       </div>
       <div class="highlights">
+        <div class="highlight-item" style="border-left-color: var(--red); border-left-width: 6px;">
+          <strong style="color: var(--red); font-size: 16px;">🚨 假设被推翻：3M 数据并非有害！</strong>
+          <span>公平对比实验 (1M data + 3f×3e) 结果: OOF=1.298, Kaggle=1.536。远差于 3M (OOF=1.137, Kaggle=0.681)。1M Old 的成功来自 5f×5e 训练配置，不是数据量。</span>
+        </div>
         <div class="highlight-item" style="border-left-color: var(--accent); border-left-width: 6px;">
           <strong style="color: var(--accent); font-size: 16px;">🏆 方差扩展是关键突破</strong>
           <span>DeBERTa 预测严重压缩: 预测 std=0.825 vs 实际 target std=1.422 (仅捕获 58% 方差)。通过线性缩放匹配目标分布，Kaggle 从 0.638 → 0.617 (单技术提升 3.3%)。</span>
@@ -405,6 +412,10 @@
         <div class="highlight-item">
           <strong>3M 过拟合已确认 (H2)</strong>
           <span>3M BS16 消融: Kaggle 0.74265 (比 3M baseline 0.681 更差)。1M 模型 (0.617) 远优于 3M。数据量增加反而伤害泛化。</span>
+        </div>
+        <div class="highlight-item" style="border-left-color: var(--red); border-left-width: 4px;">
+          <strong style="color: var(--red);">🚨 假设被推翻：3M 数据并非有害</strong>
+          <span>公平对比实验: 1M + 3f×3e = OOF 1.298 / Kaggle 1.536，远差于 3M + 3f×3e = OOF 1.137 / Kaggle 0.681。1M Old 的成功来自 5f×5e 训练配置。</span>
         </div>
         <div class="highlight-item">
           <strong>Meta-learner 优化已到极限</strong>
@@ -468,8 +479,8 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">DeBERTa-v3-base (1M Fair)</div>
-          <div class="metric-value" style="font-size: 16px; color: var(--yellow);">🔄 训练中</div>
-          <div class="metric-status">3f×3e, Fold1 Ep1 进行中</div>
+          <div class="metric-value" style="font-size: 16px; color: var(--red);">❌ 失败</div>
+          <div class="metric-status">3f×3e, OOF=1.298, Kaggle=1.536</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">DeBERTa-v3-base (3M)</div>
@@ -483,8 +494,9 @@
         </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
-        <p><strong>公平对比实验进行中:</strong> 1M 数据 + 3f×3e 配置，用于验证 3M 数据是否真的有害</p>
+        <p><strong>🚨 重大发现 (2026-06-19):</strong> 1M fair comparison 实验推翻了 "3M 数据有害" 的假设！</p>
         <p><strong>3M OOF 已修复:</strong> Overall OOF RMSE = 1.13701 (fold1:1.139, fold2:1.136, fold3:1.137)</p>
+        <p><strong>下一步:</strong> 用旧脚本 (5f×5e) 训练 3M 数据，验证是否能改善 Kaggle 分数</p>
       </div>
     </div>
 
@@ -492,7 +504,7 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">⚠️</span>
-        <span>风险与挑战 (更新于 2026-06-18 23:30)</span>
+        <span>风险与挑战 (更新于 2026-06-19 04:00)</span>
       </div>
       <div class="risks">
         <div class="risk-item critical">
@@ -500,10 +512,10 @@
           <div class="risk-desc">我们 0.617 vs 第2名 Deepsick 0.474, 差距 0.144 (30.3%)。Stacking V3 消融证明 meta-learner 优化已到极限。</div>
           <div class="risk-plan">需要 DeBERTa-v3-large + pseudo-labeling + 多模型异构集成</div>
         </div>
-        <div class="risk-item">
-          <div class="risk-title"><span>🟡</span><span>公平对比实验进行中</span></div>
-          <div class="risk-desc">1M vs 3M 公平对比实验正在运行，用于验证 3M 数据是否真的有害。结果将指导后续策略。</div>
-          <div class="risk-plan">预计 2026-06-19 10:00 完成</div>
+        <div class="risk-item critical">
+          <div class="risk-title"><span>🔴</span><span>假设被推翻：需要重新评估策略</span></div>
+          <div class="risk-desc">1M fair comparison 实验显示 1M + 3f×3e (Kaggle 1.536) 远差于 3M + 3f×3e (Kaggle 0.681)。1M Old 的成功来自 5f×5e 配置。</div>
+          <div class="risk-plan">用旧脚本 (5f×5e) 训练 3M 数据，验证是否能改善</div>
         </div>
         <div class="risk-item">
           <div class="risk-title"><span>🟡</span><span>DeBERTa-v3-large 训练暂停</span></div>
@@ -522,39 +534,41 @@
     <div class="card">
       <div class="card-title">
         <span class="icon">🎯</span>
-        <span>优化路线图 (更新于 2026-06-18 23:30)</span>
+        <span>优化路线图 (更新于 2026-06-19 04:00)</span>
       </div>
       <div style="font-size: 14px; color: var(--text-muted);">
-        <p><strong>🔬 正在进行的实验:</strong></p>
+        <p><strong>🚨 重大发现:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>🔄 1M vs 3M 公平对比实验 (1M 数据 + 3f×3e 配置)</li>
-          <li>目的: 验证 3M 数据是否真的有害 (控制训练配置变量)</li>
-          <li>预计完成: 2026-06-19 10:00</li>
+          <li>1M + 3f×3e = Kaggle 1.536 (极差)</li>
+          <li>3M + 3f×3e = Kaggle 0.681</li>
+          <li>1M + 5f×5e = Kaggle 0.617 (最佳)</li>
+          <li><strong>结论: 5f×5e 训练配置是关键，不是数据量</strong></li>
         </ul>
         <p style="margin-top: 12px;"><strong>P0 — 立即:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
           <li>✅ 已确认旧预测可精确复现 0.61734</li>
-          <li>✅ 已确认 3M 过拟合 (H2 确认)</li>
           <li>✅ 修复 3M OOF bug (Overall OOF RMSE = 1.13701)</li>
           <li>✅ 新最佳 Kaggle 0.61725 (VE90% + Stacking V3 10%)</li>
+          <li>✅ 1M fair comparison 实验完成 (假设被推翻)</li>
+          <li>🔄 用旧脚本 (5f×5e) 训练 3M 数据</li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Track A — DeBERTa 模型改进:</strong></p>
+        <p style="margin-top: 12px;"><strong>Track A — 训练配置优化:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>等待 1M fair comparison 结果</li>
-          <li>DeBERTa-v3-large: 提高 LR 到 2e-5，重新训练</li>
-          <li>多折集成: 用 3 折预测的加权平均</li>
+          <li>用旧脚本 (5f×5e) 训练 3M 数据</li>
+          <li>调查为什么 5f×5e 配置更优</li>
+          <li>可能原因: 更多折数、更多 epoch、不同学习率调度</li>
+          <li><strong>目标: Kaggle < 0.60</strong></li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>Track B — DeBERTa 模型改进:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>DeBERTa-v3-large: 提高 LR 到 2e-5，用 5f×5e 训练</li>
+          <li>多折集成: 用 5 折预测的加权平均</li>
           <li>伪标签: 用高置信度预测扩充训练集</li>
           <li><strong>目标: Kaggle < 0.55</strong></li>
         </ul>
-        <p style="margin-top: 12px;"><strong>Track B — 异构模型集成:</strong></p>
-        <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>DeBERTa-base + DeBERTa-large + XGBoost</li>
-          <li>OOF-aligned Ridge stacking</li>
-          <li><strong>目标: Kaggle < 0.50</strong></li>
-        </ul>
         <p style="margin-top: 12px;"><strong>已验证无效的路径:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>❌ 3M 数据增加 → 过拟合更严重</li>
+          <li>❌ 1M + 3f×3e → Kaggle 1.536 (极差)</li>
           <li>❌ Graph features → 无显著影响</li>
           <li>❌ Ridge+LGB meta-learner → 边际改进 (-0.00009)</li>
           <li>❌ BS=16×16 配置 → 无法拯救 3M</li>
@@ -564,7 +578,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-18 23:30</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-19 04:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

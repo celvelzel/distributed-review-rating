@@ -195,8 +195,8 @@
       <div class="metrics-grid">
         <div class="metric-card">
           <div class="metric-label">当前最佳</div>
-          <div class="metric-value" style="color: var(--green);">0.61473</div>
-          <div class="metric-status">🏆 1M VE 88% + Stacking V3 ridge+lgb 12%</div>
+          <div class="metric-value" style="color: var(--green);">0.59770</div>
+          <div class="metric-status">🏆 1M VE 60% + Stacking V3 ridge+lgb 40%</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">基线</div>
@@ -205,13 +205,13 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">改进幅度</div>
-          <div class="metric-value" style="color: var(--green);">12.1%</div>
-          <div class="metric-status">0.699 → 0.615</div>
+          <div class="metric-value" style="color: var(--green);">14.5%</div>
+          <div class="metric-status">0.699 → 0.598</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">第2名 (Deepsick)</div>
           <div class="metric-value" style="color: var(--yellow);">0.47361</div>
-          <div class="metric-status">差距 0.141 (29.8%)</div>
+          <div class="metric-status">差距 0.124 (26.2%)</div>
         </div>
       </div>
 
@@ -225,14 +225,46 @@
           <tbody>
             <tr>
               <td>1</td>
-              <td>sub-deb1m-ve88-sv3rlg12.csv</td>
-              <td class="score-best">0.61473</td>
-              <td>6/20 11:23</td>
+              <td>sub-deb1m-ve60-sv3rlg40.csv</td>
+              <td class="score-best">0.59770</td>
+              <td>6/20 14:08</td>
               <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
-              <td>🏆 1M VE 88% + Stacking V3 ridge+lgb 12% — NEW BEST</td>
+              <td>🏆 1M VE 60% + Stacking V3 ridge+lgb 40% — NEW BEST</td>
             </tr>
             <tr>
               <td>2</td>
+              <td>sub-deb1m-ve55-sv3rlg45.csv</td>
+              <td>0.59862</td>
+              <td>6/20 14:06</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
+              <td>1M VE 55% + Stacking V3 ridge+lgb 45%</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>sub-deb1m-ve50-sv3rlg50.csv</td>
+              <td>0.60073</td>
+              <td>6/20 14:02</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
+              <td>1M VE 50% + Stacking V3 ridge+lgb 50%</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>sub-deb1m-ve85-sv3rlg15.csv</td>
+              <td>0.61115</td>
+              <td>6/20 13:59</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
+              <td>1M VE 85% + Stacking V3 ridge+lgb 15%</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>sub-deb1m-ve88-sv3rlg12.csv</td>
+              <td>0.61473</td>
+              <td>6/20 11:23</td>
+              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
+              <td>1M VE 88% + Stacking V3 ridge+lgb 12%</td>
+            </tr>
+            <tr>
+              <td>6</td>
               <td>submission-deb1m-ve90-sv3-10.csv</td>
               <td>0.61725</td>
               <td>6/18 15:24</td>
@@ -240,64 +272,32 @@
               <td>1M VE 90% + Stacking V3 ridge+lgb 10%</td>
             </tr>
             <tr>
-              <td>3</td>
-              <td>ablation-v3-ridge-lgb.csv</td>
-              <td>0.61725</td>
-              <td>6/18 12:07</td>
-              <td><code>stacking_v3.py</code></td>
-              <td>V3 Stacking: 9 base models + Ridge+LGB meta-learner</td>
-            </tr>
-            <tr>
-              <td>4</td>
-              <td>ablation-v2-ridge.csv / dve90-r10.csv</td>
+              <td>7</td>
+              <td>dve90-r10.csv</td>
               <td>0.61734</td>
-              <td>6/14</td>
+              <td>6/15</td>
               <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
               <td>DeBERTa VE 90% + Ridge Stacking 10% (旧最佳)</td>
             </tr>
             <tr>
-              <td>5</td>
-              <td>sub-deb1m-ve90-sv3lgb10.csv</td>
-              <td>0.61733</td>
-              <td>6/20 11:23</td>
-              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
-              <td>1M VE 90% + Stacking V3 lgb 10%</td>
-            </tr>
-            <tr>
-              <td>6</td>
-              <td>sub-deb1m-ve92-sv3r8.csv</td>
-              <td>0.62029</td>
-              <td>6/20 11:23</td>
-              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
-              <td>1M VE 92% + Stacking V3 ridge 8%</td>
-            </tr>
-            <tr>
-              <td>7</td>
+              <td>8</td>
               <td>dve95-r5.csv</td>
               <td>0.62463</td>
-              <td>6/14</td>
+              <td>6/15</td>
               <td><code>deberta_lora_1m.py</code> + <code>stacking_v2.py</code></td>
               <td>DeBERTa VE 95% + Ridge 5%</td>
-            </tr>
-            <tr>
-              <td>8</td>
-              <td>sub-deb1m85-basemulti10-sv3rlg5.csv</td>
-              <td>0.62468</td>
-              <td>6/20 11:23</td>
-              <td><code>deberta_lora_1m.py</code> + <code>stacking_v3.py</code></td>
-              <td>1M VE 85% + Base multi 10% + V3 ridge+lgb 5%</td>
             </tr>
             <tr>
               <td>9</td>
               <td>deberta-ve.csv</td>
               <td>0.63287</td>
-              <td>6/14</td>
+              <td>6/15</td>
               <td><code>deberta_lora_1m.py</code></td>
               <td>DeBERTa VE alone</td>
             </tr>
             <tr>
               <td>10</td>
-              <td>stacking-v2</td>
+              <td>stacking-v2.csv</td>
               <td>0.66376</td>
               <td>6/14</td>
               <td><code>stacking_v2.py</code></td>
@@ -350,9 +350,9 @@
         <div style="margin-top: 12px; padding: 12px; background: var(--bg); border-radius: 8px; font-size: 13px;">
           <strong>关键发现:</strong>
           <ul style="margin-left: 20px; margin-top: 6px;">
-            <li>VE 比例微调有效: 88% 比 90% 略好 (-0.00252)</li>
-            <li>Stacking V3 ridge+lgb 比单独 ridge 或 lgb 更好</li>
-            <li>Base multi-fold ensemble 有害 (0.68555 vs 0.617)</li>
+            <li>VE 比例优化: 60% 比 90% 好得多 (0.59770 vs 0.61725)</li>
+            <li>Stacking V3 ridge+lgb 比 VE 更重要</li>
+            <li>最佳比例: VE 60% + V3 ridge+lgb 40%</li>
             <li>LoRA 过拟合: 47K steps (5f×5e) vs 23K steps (3f×3e)</li>
           </ul>
         </div>
@@ -452,7 +452,8 @@
         </div>
         <div style="margin-top: 16px; padding: 14px; background: var(--bg); border-radius: 8px;">
           <p><strong>原理:</strong> Transformer 回归模型倾向于输出"安全"的中间值，方差扩展是后处理校准，恢复正确的预测尺度。</p>
-          <p style="margin-top: 8px;"><strong>最佳混合:</strong> VE 88% + Stacking V3 ridge+lgb 12% (Kaggle 0.61473)</p>
+          <p style="margin-top: 8px;"><strong>最佳混合:</strong> VE 60% + Stacking V3 ridge+lgb 40% (Kaggle 0.59770)</p>
+          <p style="margin-top: 4px;"><strong>关键发现:</strong> Stacking V3 ridge+lgb 比 VE 更重要！低 VE 比例 (50-60%) 效果更好。</p>
           <p style="margin-top: 4px;"><strong>失败尝试:</strong> 量化匹配 (0.851) 和 Power transform (0.752) 都过于激进</p>
         </div>
       </div>
@@ -487,9 +488,9 @@
         </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
-        <p><strong>🎉 新最佳 (2026-06-20):</strong> VE 88% + Stacking V3 ridge+lgb 12% = 0.61473</p>
-        <p><strong>DeBERTa-v3-large 重训中:</strong> LR=2e-5, 从 fold1_epoch2 恢复, ETA ~36h</p>
-        <p><strong>3M 5f×5e 已停止:</strong> Oracle 确认 LoRA 过拟合 (47K steps vs 23K)</p>
+        <p><strong>🎉 重大突破 (2026-06-20):</strong> VE 比例优化发现 Stacking V3 ridge+lgb 比 VE 更重要！</p>
+        <p><strong>最佳配方:</strong> VE 60% + Stacking V3 ridge+lgb 40% = 0.59770</p>
+        <p><strong>DeBERTa-v3-large 重训中:</strong> LR=2e-5, ETA ~36h</p>
       </div>
     </div>
 
@@ -594,7 +595,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-20 12:00</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-20 14:10</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

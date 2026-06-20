@@ -1,5 +1,5 @@
 # COMP5434 Training Progress Tracker
-_Last updated: 2026-06-20 12:00_
+_Last updated: 2026-06-20 14:10_
 
 ## Current Status
 
@@ -9,7 +9,8 @@ _Last updated: 2026-06-20 12:00_
 | **v3-large** | 🔄 RUNNING | LR=2e-5, Fold1 Ep3 进行中 |
 | **3M 5f×5e** | ⏸️ STOPPED | LoRA 过拟合确认 (val_rmse 1.396) |
 | **Stacking V3** | ✅ COMPLETE | OOF=1.118, ablation done |
-| **Kaggle Best** | **0.61473** | VE 88% + Stacking V3 ridge+lgb 12% |
+| **VE Ratio Optimization** | ✅ COMPLETE | 最佳: VE 60% + V3 rlg 40% |
+| **Kaggle Best** | **0.59770** | VE 60% + Stacking V3 ridge+lgb 40% |
 | **Target** | < 0.47361 | Beat 2nd place (Deepsick) |
 
 ---
@@ -72,16 +73,30 @@ Large model is **1.9% worse** at epoch 2 despite 3.5x more params.
 
 | Rank | Score | Submission | Date |
 |------|-------|-----------|------|
-| 1 | **0.61473** | sub-deb1m-ve88-sv3rlg12 | Jun 20 |
-| 2 | 0.61725 | submission-deb1m-ve90-sv3-10 | Jun 18 |
-| 3 | 0.61734 | dve90-r10 | Jun 15 |
-| 4 | 0.61733 | sub-deb1m-ve90-sv3lgb10 | Jun 20 |
-| 5 | 0.62029 | sub-deb1m-ve92-sv3r8 | Jun 20 |
-| 6 | 0.62463 | dve95-r5 | Jun 15 |
-| 7 | 0.62468 | sub-deb1m85-basemulti10-sv3rlg5 | Jun 20 |
-| 8 | 0.63287 | deberta-ve | Jun 15 |
-| 9 | 0.63449 | base_ve_90_small_ve_10 | Jun 16 |
+| 1 | **0.59770** | sub-deb1m-ve60-sv3rlg40 | Jun 20 |
+| 2 | 0.59862 | sub-deb1m-ve55-sv3rlg45 | Jun 20 |
+| 3 | 0.60073 | sub-deb1m-ve50-sv3rlg50 | Jun 20 |
+| 4 | 0.61115 | sub-deb1m-ve85-sv3rlg15 | Jun 20 |
+| 5 | 0.61473 | sub-deb1m-ve88-sv3rlg12 | Jun 20 |
+| 6 | 0.61725 | submission-deb1m-ve90-sv3-10 | Jun 18 |
+| 7 | 0.61734 | dve90-r10 | Jun 15 |
+| 8 | 0.62463 | dve95-r5 | Jun 15 |
+| 9 | 0.63287 | deberta-ve | Jun 15 |
 | 10 | 0.66376 | stacking-v2 | Jun 14 |
+
+### VE 比例优化结果 (2026-06-20)
+
+| VE% | V3 rlg% | Kaggle RMSE |
+|-----|---------|-------------|
+| **60%** | **40%** | **0.59770** ✅ |
+| 55% | 45% | 0.59862 |
+| 50% | 50% | 0.60073 |
+| 85% | 15% | 0.61115 |
+| 88% | 12% | 0.61473 |
+| 90% | 10% | 0.61725 |
+| 30% | 70% | 0.62090 |
+
+**关键发现**: Stacking V3 ridge+lgb 比 VE 更重要！最佳比例在 60/40 附近。
 
 ## Ablation Study Results (2026-06-18)
 

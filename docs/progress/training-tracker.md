@@ -1,15 +1,15 @@
 # COMP5434 Training Progress Tracker
-_Last updated: 2026-06-18 20:00_
+_Last updated: 2026-06-20 12:00_
 
 ## Current Status
 
 | Component | Status | Details |
 |-----------|--------|---------|
 | **v3-base** | ✅ COMPLETE | 3f×3e, all 9 checkpoints saved |
-| **v3-large** | ⏸️ PAUSED | fold1 e1+e2 done, need LR=2e-5 |
-| **3M BS16 Ablation** | 🔄 RUNNING | 85% complete, ETA ~1.3h |
+| **v3-large** | 🔄 RUNNING | LR=2e-5, Fold1 Ep3 进行中 |
+| **3M 5f×5e** | ⏸️ STOPPED | LoRA 过拟合确认 (val_rmse 1.396) |
 | **Stacking V3** | ✅ COMPLETE | OOF=1.118, ablation done |
-| **Kaggle Best** | 0.61734 | DeBERTa VE 90% + Ridge 10% |
+| **Kaggle Best** | **0.61473** | VE 88% + Stacking V3 ridge+lgb 12% |
 | **Target** | < 0.47361 | Beat 2nd place (Deepsick) |
 
 ---
@@ -29,18 +29,19 @@ _Last updated: 2026-06-18 20:00_
 
 ---
 
-## Large Model (DeBERTa-v3-large, 435M) — ⏸️ PAUSED
+## Large Model (DeBERTa-v3-large, 435M) — 🔄 RUNNING
 
 | Fold | Epoch 1 | Epoch 2 | Epoch 3 |
 |------|---------|---------|---------|
-| 1 | ~1.1787 | **1.15961** | ⏳ pending |
+| 1 | ~1.1787 | **1.15961** | 🔄 进行中 |
 | 2 | — | — | — |
 | 3 | — | — | — |
 
-- Config: LoRA r=16 α=32, BS=16, GradAcc=16, LR=1e-5, CORAL+R-Drop
-- PID: — (paused)
+- Config: LoRA r=16 α=32, BS=16, GradAcc=16, **LR=2e-5**, CORAL+R-Drop
+- PID: 1821809
 - Checkpoints: `artifacts/models/checkpoints_large_full/` (fold1_e1, fold1_e2)
-- **Note:** LR=1e-5 may be too low — val_rmse worse than base at same epoch (1.160 vs 1.139). Consider increasing to 2e-5 when resuming.
+- **Note:** 从 fold1_epoch2 恢复，LR 从 1e-5 提高到 2e-5
+- ETA: ~36h (2026-06-21 ~00:00)
 
 ---
 
@@ -71,12 +72,16 @@ Large model is **1.9% worse** at epoch 2 despite 3.5x more params.
 
 | Rank | Score | Submission | Date |
 |------|-------|-----------|------|
-| 1 | **0.61734** | dve90-r10 (OLD predictions) | Jun 15 |
-| 2 | 0.61725 | ablation-v3-ridge-lgb (V3 Ridge+LGB) | Jun 18 |
-| 3 | 0.61746 | ablation-v3-ridge (V3 Ridge) | Jun 18 |
-| 4 | 0.62463 | dve95-r5 | Jun 15 |
-| 5 | 0.63287 | deberta-ve | Jun 15 |
-| 6 | 0.63449 | base_ve_90_small_ve_10 | Jun 16 |
+| 1 | **0.61473** | sub-deb1m-ve88-sv3rlg12 | Jun 20 |
+| 2 | 0.61725 | submission-deb1m-ve90-sv3-10 | Jun 18 |
+| 3 | 0.61734 | dve90-r10 | Jun 15 |
+| 4 | 0.61733 | sub-deb1m-ve90-sv3lgb10 | Jun 20 |
+| 5 | 0.62029 | sub-deb1m-ve92-sv3r8 | Jun 20 |
+| 6 | 0.62463 | dve95-r5 | Jun 15 |
+| 7 | 0.62468 | sub-deb1m85-basemulti10-sv3rlg5 | Jun 20 |
+| 8 | 0.63287 | deberta-ve | Jun 15 |
+| 9 | 0.63449 | base_ve_90_small_ve_10 | Jun 16 |
+| 10 | 0.66376 | stacking-v2 | Jun 14 |
 
 ## Ablation Study Results (2026-06-18)
 

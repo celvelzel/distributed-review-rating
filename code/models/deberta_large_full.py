@@ -20,12 +20,12 @@ OUTPUT_DIR = os.path.join(ROOT, "output")
 os.makedirs(CKPT_DIR, exist_ok=True)
 
 MODEL_NAME = "microsoft/deberta-v3-large"
-LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.05
-LORA_TARGET = ["query_proj", "value_proj"]
+LORA_R, LORA_ALPHA, LORA_DROPOUT = 32, 64, 0.02
+LORA_TARGET = ["query_proj", "value_proj", "key_proj", "output_proj", "dense"]
 N_CLASSES, N_TASKS = 5, 4
 N_FOLDS, N_EPOCHS = 3, 3
 BATCH_SIZE, GRAD_ACCUM = 16, 16
-LR, WEIGHT_DECAY, WARMUP_RATIO = 2e-5, 0.01, 0.1
+LR, WEIGHT_DECAY, WARMUP_RATIO = 3e-5, 0.01, 0.1
 R_DROP_ALPHA, FP16, PATIENCE = 0.5, True, 3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

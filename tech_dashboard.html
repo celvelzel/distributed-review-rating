@@ -483,14 +483,14 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">DeBERTa-v3-large (3M)</div>
-          <div class="metric-value" style="font-size: 16px; color: var(--yellow);">🔄 训练中</div>
-          <div class="metric-status">3f×3e, LR=2e-5, Fold1 Ep3 进行中</div>
+          <div class="metric-value" style="font-size: 16px; color: var(--red);">❌ OOM</div>
+          <div class="metric-status">BS=128 导致 CUDA OOM</div>
         </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
         <p><strong>🎉 重大突破 (2026-06-20):</strong> VE 比例优化发现 Stacking V3 ridge+lgb 比 VE 更重要！</p>
         <p><strong>最佳配方:</strong> VE 60% + Stacking V3 ridge+lgb 40% = 0.59770</p>
-        <p><strong>DeBERTa-v3-large 重训中:</strong> LR=2e-5, ETA ~36h</p>
+        <p><strong>DeBERTa-v3-large OOM:</strong> BS=128 导致 CUDA OOM，已回退到 BS=64</p>
       </div>
     </div>
 
@@ -595,7 +595,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-20 14:10</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-21 01:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

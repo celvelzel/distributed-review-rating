@@ -1,5 +1,7 @@
 # 3M BS16 Ablation Experiment Progress
 
+**Date**: 2026-06-18
+
 ## Experiment Goal
 
 Test whether 3M DeBERTa's poor performance (0.681 vs 1M's 0.617) is due to batch config (32×8) or overfitting.

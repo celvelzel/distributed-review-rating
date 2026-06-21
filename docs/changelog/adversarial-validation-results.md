@@ -1,5 +1,7 @@
 # Adversarial Validation Report — T11
 
+**Date**: 2026-06-06
+
 ## Objective
 Detect distribution shift between train and test sets using a LightGBM binary classifier.
 If AUC ≈ 0.5 → distributions are similar (good). If AUC > 0.6 → shift detected.

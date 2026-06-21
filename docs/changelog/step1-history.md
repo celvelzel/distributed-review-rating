@@ -1,5 +1,7 @@
 # Step 1: Read and Understand the History
 
+**Date**: 2026-06-07
+
 ## Project Summary
 
 The project is a Kaggle competition for predicting review ratings (1–5 stars) using distributed data processing and machine learning. The project has progressed through several stages, improving from a baseline RMSE of 1.1763 to a final RMSE of 0.5453.

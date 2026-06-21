@@ -1,5 +1,7 @@
 # DeBERTa-v3-large 优化训练进度
 
+**Date**: 2026-06-20
+
 ## 实验目的
 
 优化 DeBERTa-v3-large 的 LoRA 配置，增加模型容量以改善 val_rmse。

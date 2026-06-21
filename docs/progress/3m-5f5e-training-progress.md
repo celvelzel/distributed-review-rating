@@ -1,5 +1,7 @@
 # 3M 5f×5e Training Progress
 
+**Date**: 2026-06-19
+
 ## 实验目的
 
 验证 5f×5e 训练配置是否是 Kaggle 0.617 的关键因素（而非数据量）。

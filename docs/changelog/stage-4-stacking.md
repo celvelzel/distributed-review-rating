@@ -1,5 +1,7 @@
 # T20: Stacking Ensemble with Ridge Meta-Learner
 
+**Date**: 2026-06-06
+
 ## Architecture
 - **Meta-learner**: Ridge Regression (α=1.0, fit_intercept=True)
 - **Base models**: LGB, CatBoost, MLP

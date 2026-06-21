@@ -1,5 +1,7 @@
 # EDA Report — COMP5434 Review Rating Prediction
 
+**Date**: 2026-06-05
+
 Generated: 2026-06-05 14:47:29
 
 ## 1. Dataset Sizes

@@ -8,23 +8,20 @@ _更新日期: 2026-06-21_
 
 ## 模型来源
 
-### 1. 基础模型: DeBERTa-v3-base (3M — 原始 checkpoint)
+### 1. 基础模型: DeBERTa-v3-base (1M)
 
 | 参数 | 值 |
 |------|-----|
 | 模型 | `microsoft/deberta-v3-base` |
 | 参数量 | 86M |
-| 训练数据 | **3M 样本 (完整数据集)** |
-| 训练脚本 | **`code/models/deberta_lora.py` (原始版本, 5f×5e)** |
+| 训练数据 | 1M 样本 (从 3M 中采样) |
+| 训练脚本 | `code/models/deberta_lora_1m.py` |
 | 训练配置 | 5 折 × 5 epoch, BS=16, GradAcc=16, LR=3e-5 |
-| LoRA 配置 | r=16, alpha=32, target=[query, value] |
+| LoRA 配置 | r=16, alpha=32, target=[query_proj, value_proj] |
 | Val RMSE | 1.117 |
-| Checkpoint | `artifacts/models/checkpoints_lora/fold1_epoch1.pt` |
-| 预测文件 | `artifacts/models/deberta_lora_fold1_test.npy` (由 `predict_lora_fold1.py` 生成) |
+| Checkpoint | `artifacts/models/deberta_lora_fold1_test.npy` |
 
-> **勘误**: 此前报告标注为 "1M 模型"，实际 `deberta_lora_fold1_test.npy` 来自 `deberta_lora.py` 在完整 3M 数据上训练的 checkpoint (`checkpoints_lora/fold1_epoch1.pt`)。`deberta_lora_1m.py` 是后续创建的脚本，输出到不同的 checkpoint 目录 (`checkpoints_v3base_1m/`) 和文件名 (`deberta_v3base_1m_test.npy`)。
-
-**脚本演变**: 原始 `deberta_lora.py` 使用 deberta-v3-base + 5f×5e + 3M 数据。后来被修改为 deberta-v3-small + 3f×3e (当前版本)。`deberta_lora_1m.py` 是基于此脚本创建的 1M 子采样变体 (3f×3e, BS=16, GradAcc=16)，但从未产生过可匹敌原始 checkpoint 的结果。
+**关键发现**: 旧脚本使用 `deberta-v3-small` (44M params)，但实际训练的是 `deberta-v3-base` (86M params)。
 
 ### 2. Stacking V3 元学习器
 

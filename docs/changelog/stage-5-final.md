@@ -1,5 +1,7 @@
 # T23: Final Pipeline & Submission
 
+**Date**: 2026-06-06
+
 ## Summary
 
 Generated final Kaggle submission using stacking ensemble test predictions.

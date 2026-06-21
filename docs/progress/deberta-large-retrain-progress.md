@@ -1,5 +1,7 @@
 # DeBERTa-v3-large Training Progress (LR=2e-5)
 
+**Date**: 2026-06-20
+
 ## 实验目的
 
 用 LR=2e-5 重新训练 DeBERTa-v3-large，验证是否能改善 val_rmse。

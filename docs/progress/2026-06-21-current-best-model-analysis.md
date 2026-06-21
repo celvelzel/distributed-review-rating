@@ -32,7 +32,7 @@ blend = np.clip(blend, 1.0, 5.0)
 
 | 组分 | 权重 | 说明 |
 |------|------|------|
-| DeBERTa-v3-base VE | 60% | DeBERTa 原始预测经方差扩展校准 |
+| DeBERTa-v3-base (1M) VE | 60% | DeBERTa 原始预测经方差扩展校准 |
 | Stacking V3 ridge+lgb | 40% | 9 个基础模型的元学习器集成预测 |
 
 ### 1.3 DeBERTa 基础模型
@@ -40,17 +40,16 @@ blend = np.clip(blend, 1.0, 5.0)
 | 参数 | 值 |
 |------|-----|
 | 模型 | `microsoft/deberta-v3-base` (86M params) |
-| 训练数据 | 3M 样本 (完整数据集) |
-| 训练脚本 | `code/models/deberta_lora.py` (原始版本) |
+| 训练数据 | **1M 样本** (从 3M 中随机采样) |
+| 训练脚本 | `code/models/deberta_lora_1m.py` |
 | 训练配置 | 5 折 × 5 epoch, BS=16, GradAcc=16, LR=3e-5 |
-| LoRA | r=16, alpha=32, target=[query, value], dropout=0.05 |
+| LoRA | r=16, alpha=32, target=[query_proj, value_proj], dropout=0.05 |
 | Loss | CORAL ordinal + R-Drop (alpha=0.5) |
 | Val RMSE | 1.117 |
 | Checkpoint | `artifacts/models/checkpoints_lora/fold1_epoch1.pt` |
+| 预测文件 | `artifacts/models/deberta_lora_fold1_test.npy` (由 `predict_lora_fold1.py` 生成) |
 
-> **注意**: 最佳 checkpoint 来自 fold1 epoch1 (而非最后一折或最后一个 epoch)。这是一个重要的事实——早期 epoch 的 checkpoint 泛化能力反而更好。
-
-> **脚本演变**: 原始 `deberta_lora.py` 使用 deberta-v3-base + 5f×5e + 3M 数据，产出最佳 checkpoint。后来该脚本被修改为 deberta-v3-small + 3f×3e (当前磁盘版本)。`deberta_lora_1m.py` 是后续创建的 1M 子采样变体 (3f×3e)，从未产生过可匹敌的结果。
+> **注意**: 最佳 checkpoint 来自 fold1 epoch1 (而非最后一折或最后一个 epoch)。早期 epoch 的 checkpoint 泛化能力反而更好。
 
 ### 1.4 为什么 5f×5e 配置是关键
 
@@ -58,11 +57,11 @@ blend = np.clip(blend, 1.0, 5.0)
 
 | 实验 | 数据 | 配置 | OOF RMSE | Kaggle RMSE |
 |------|------|------|----------|-------------|
-| 原始 (最佳) | 3M | 5f×5e | 1.117 | 0.617 |
+| **最佳** | **1M** | **5f×5e** | **1.117** | **0.617** |
 | 1M Fair | 1M | 3f×3e | 1.298 | 1.536 |
 | 3M Full | 3M | 3f×3e | 1.137 | 0.681 |
 
-5f×5e 相比 3f×3e 的优势在于: 更多折数提供更好的 OOF 估计，更多 epoch 让 LR scheduler 有更充分的 cosine 退火 (1M epoch1 已完成退火 LR→0，而 3M epoch1 仅退火 33%)。
+5f×5e 相比 3f×3e 的优势在于: 更多折数提供更好的 OOF 估计，更多 epoch 让 LR scheduler 有更充分的 cosine 退火。1M 数据的 scheduler 总步数较少 (3125 vs 23438)，epoch1 即可完成 LR→0 的退火，而 3M epoch1 仅退火 33%。
 
 ---
 
@@ -109,7 +108,8 @@ artifacts/etl/
   test.parquet  ──→ 所有基础模型的测试输入 + 提交 ID
 
 artifacts/features/
-  y_train.npy              ──→ 训练标签 (所有模型共用)
+  y_train.npy              ──→ 训练标签 (VE 统计用)
+  y_train_1m.npy           ──→ 1M DeBERTa 训练标签
   chartfidf_train/test.npz ──→ lgb_tfidf
   sentiment.parquet        ──→ lgb_safe_dense, xgboost_safe, catboost_safe
   product_metadata.parquet ──→ (同上)
@@ -321,9 +321,9 @@ python code/models/predict_lora_fold1.py
 
 如果需要重新训练 DeBERTa (在 HPC 上，~10h):
 ```bash
-# 注意: 需使用原始版本的 deberta_lora.py (5f×5e, deberta-v3-base, 3M)
-# 当前磁盘版本已被修改为 v3-small + 3f×3e，需要 git checkout 回原始版本
-# git show 7418034:code/models/deberta_lora.py > code/models/deberta_lora_original.py
+# 使用 deberta_lora_1m.py (1M 数据, 5f×5e, deberta-v3-base)
+python code/models/deberta_lora_1m.py
+# 注意: 该脚本当前磁盘版本的配置可能与原始训练不一致，请核实 5f×5e 配置
 ```
 
 #### Step 3: Stacking V3
@@ -431,7 +431,7 @@ artifacts/models/test_tokens.npz                 # 测试 ID
 
 | 脚本 | 产出 |
 |------|------|
-| `deberta_lora.py` (原始) | `checkpoints_lora/fold{0-4}_epoch{1-5}.pt` |
+| `deberta_lora_1m.py` | `checkpoints_lora/fold{0-4}_epoch{1-5}.pt` (1M 数据) |
 | `predict_lora_fold1.py` | `deberta_lora_fold1_test.npy` |
 | `xgboost_train.py` | `xgboost_oof.npy`, `xgboost_test.npy` |
 | `run_mlp.py` | `mlp_oof.npy`, `mlp_test.npy` |

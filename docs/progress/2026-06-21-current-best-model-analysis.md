@@ -101,6 +101,8 @@ distributed-review-rating/
 
 ### 2.3 数据文件依赖图
 
+> **重要**: `artifacts/` 目录下的大部分文件 (模型预测 .npy、checkpoints、特征 .parquet) 仅存在于 HPC 集群上，不在本地 Git 仓库中。新成员需要从 HPC 下载所需文件，或按以下步骤重新生成。
+
 ```
 artifacts/etl/
   train.parquet ──→ 所有基础模型的训练输入
@@ -284,16 +286,18 @@ pip install vaderSentiment textblob  # sentiment features
 
 以下按依赖顺序列出。所有脚本从 repo 根目录运行: `python code/路径/脚本.py`
 
-#### Step 0: 特征工程
+#### Step 0: ETL + 特征工程
 
 | 步骤 | 脚本 | 产出 |
 |------|------|------|
+| -1 | ETL 预处理 (已在 HPC 完成) | `artifacts/etl/train.parquet`, `test.parquet` |
 | 0a | `code/features/text_chartfidf.py` | `chartfidf_train/test.npz` |
 | 0b | `code/features/sentiment.py` | `sentiment.parquet` |
 | 0c | `code/features/product_metadata.py` | `product_metadata.parquet` |
 | 0d | `code/features/expand_graph_features.py` | `expanded_graph_train/test.parquet` |
 | 0e | `code/features/user_stats_kfold.py` | `user_stats_kfold.parquet` |
 | 0f | `code/features/product_stats_kfold.py` | `product_stats_kfold.parquet` |
+| 0g | `code/features/run_bert.py` (或类似脚本) | `bert_train/test.parquet` (MLP 所需的 DeBERTa embedding) |
 
 #### Step 1: 基础模型训练
 
@@ -335,6 +339,8 @@ python code/models/verify_stacking_v3.py
 ```
 
 #### Step 4: 生成提交
+
+> **注意**: `submit_stacking_v3.py` 仅扫描 VE 比例 75%-95%，无法生成 60/40 最佳比例。最佳提交必须通过下方手动代码生成。
 
 ```bash
 # 自动提交多种比例
@@ -442,7 +448,7 @@ artifacts/models/test_tokens.npz                 # 测试 ID
 | `artifacts/features/y_train.npy` | 3M 训练标签 (VE 统计: mean=3.941, std=1.422) |
 | `artifacts/etl/train.parquet` | 3M 训练数据 (title, comment, user_id, product_id, rating) |
 | `artifacts/etl/test.parquet` | 10K 测试数据 (id, title, comment, user_id, product_id) |
-| `docs/changelog/metrics.json` | Kaggle 提交历史 (注: 未更新到 0.59770) |
+| `docs/changelog/metrics.json` | Kaggle 提交历史 (注: 文件路径可能已变更为带日期前缀的版本; 内容未更新到 0.59770) |
 
 ### VE 比例优化实验记录
 

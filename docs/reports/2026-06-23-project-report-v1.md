@@ -611,10 +611,10 @@ ve = (pred - pred.mean()) / pred.std() * target_std + target_mean
 
 | 文件 | 路径 | 说明 |
 |------|------|------|
-| 最佳提交 | output/sub-deb1m-ve60-sv3rlg40.csv | Kaggle RMSE 0.59770 |
-| 集成指南 | docs/ensemble-composition-guide.md | 完整配方和流程 |
+| 最佳提交 | output/archive/submissions/sub-deb1m-ve60-sv3rlg40.csv | Kaggle RMSE 0.59770 |
+| 集成指南 | docs/designs/ensemble-composition-guide.md | 完整配方和流程 |
 | 最佳模型分析 | docs/progress/2026-06-21-current-best-model-analysis.md | 详细配置 |
-| OOF 分析 | docs/2026-06-23-oof-kaggle-correlation-analysis.md | 相关性分析 |
+| OOF 分析 | docs/analysis/2026-06-23-oof-kaggle-correlation-analysis.md | 相关性分析 |
 | VE 优化 | docs/changelog/2026-06-20-ve-ratio-optimization.md | 比例优化 |
 | Stacking V3 结果 | docs/changelog/2026-06-18-stacking-v3-results.md | 元学习器比较 |
 | ETL 代码 | code/etl/spark_etl.py | Spark ETL 函数 |

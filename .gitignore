@@ -17,6 +17,7 @@ mlruns/
 *.bin
 *.pt
 *.pth
+catboost_info/
 
 # Coverage and testing
 htmlcov/

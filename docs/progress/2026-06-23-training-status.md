@@ -1,6 +1,6 @@
 # 2026-06-23 训练状态报告
 
-_更新日期: 2026-06-23 18:05_
+_更新日期: 2026-06-23 11:00_
 
 ## 当前状态
 
@@ -42,6 +42,17 @@ Fold 3 测试集预测生成 ⏳ 待执行
 | 4 | sub-deb1m-ve85-sv3rlg15.csv | 0.61115 | 6/20 | VE 85% + Stacking V3 rlg 15% |
 | 5 | submission-deb1m-ve90-sv3-10.csv | 0.61725 | 6/18 | VE 90% + Stacking V3 rlg 10% |
 
+### DeBERTa-v3-large 提交结果 (2026-06-23)
+
+| 排名 | 文件名 | Kaggle RMSE | 日期 | 策略 | 备注 |
+|------|--------|-------------|------|------|------|
+| — | sub-large-fold1-ve60-rlg40.csv | 0.67785 | 6/23 | Large fold1 VE 60% + RLG 40% | ❌ 比最佳差 13.4% |
+| — | sub-large-fold1-ve-only.csv | 0.77886 | 6/23 | Large fold1 VE only (100%) | ❌ 比最佳差 30.3% |
+| — | sub-large-ve60-rlg40.csv | 1.07035 | 6/23 | Large VE 60% + RLG 40% | ❌ 比最佳差 79.1% |
+| — | sub-large-ve-only.csv | 1.47286 | 6/23 | Large VE only (100%) | ❌ 比最佳差 146.4% |
+
+**结论**: DeBERTa-v3-large 模型所有提交均不如当前最佳的 DeBERTa-v3-base (1M) 模型。Large 模型方向已验证无效。
+
 ### VE 比例优化结果
 
 | VE% | V3 rlg% | Kaggle RMSE | vs 最佳 |
@@ -61,7 +72,7 @@ Fold 3 测试集预测生成 ⏳ 待执行
 |------|------|--------|----------|--------|------|
 | DeBERTa-v3-base | 1M | 5f×5e, LoRA r=16 | 1.117 | 0.598 | 🏆 最佳 |
 | DeBERTa-v3-base | 3M | 3f×3e, LoRA r=16 | 1.137 | 0.681 | ✅ 完成 |
-| DeBERTa-v3-large | 3M | 3f×3e, LoRA r=32 | 1.420 | — | 🔄 后处理中 |
+| DeBERTa-v3-large | 3M | 3f×3e, LoRA r=32 | 1.420 | 0.678 | 🔄 重新训练中 |
 | Stacking V3 ridge+lgb | — | 9 base models | — | — | ✅ 完成 |
 
 ## 核心发现
@@ -91,6 +102,20 @@ Fold 3 测试集预测生成 ⏳ 待执行
 - Graph features 无显著影响 (+0.00012)
 - **瓶颈**: DeBERTa 模型质量，不是集成方法
 
+### 5. Large 模型首次提交结果 (2026-06-23)
+
+- **DeBERTa-v3-large (3f×3e, LoRA r=32)**: Val RMSE 1.420, Kaggle 最佳 0.678
+- **问题原因**: fold2/fold3 训练参数配置不足
+  - Large 模型参数量 (435M) 是 Base (86M) 的 5 倍
+  - 3f×3e 配置导致严重欠拟合
+  - fold2 和 fold3 的 Val RMSE 均在 1.42 左右
+- **提交结果**:
+  - sub-large-fold1-ve60-rlg40.csv: 0.67785 (比最佳差 13.4%)
+  - sub-large-fold1-ve-only.csv: 0.77886 (比最佳差 30.3%)
+  - sub-large-ve60-rlg40.csv: 1.07035 (比最佳差 79.1%)
+  - sub-large-ve-only.csv: 1.47286 (比最佳差 146.4%)
+- **结论**: 首次训练配置无效，正在重新训练中
+
 ## 风险与挑战
 
 ### 🔴 高风险
@@ -100,12 +125,14 @@ Fold 3 测试集预测生成 ⏳ 待执行
    - 差距 0.124 (26.2%)
    - 需要突破性改进
 
-### 🟡 中风险
+2. **Large 模型首次训练配置无效**
+   - DeBERTa-v3-large (3f×3e) 提交 4 次，最佳 Kaggle 0.678
+   - 比 Base 模型最佳 (0.598) 差 13.4%
+   - Val RMSE 1.420 远高于 Base 的 1.117
+   - 原因: fold2/fold3 训练参数配置不足
+   - **状态: 🔄 重新训练中**
 
-2. **Large 模型 Val RMSE 较高**
-   - Large 模型 Val RMSE 1.420 vs Base 模型 1.117
-   - 可能过拟合或需要更多训练
-   - 等待测试集预测结果
+### 🟡 中风险
 
 3. **每日提交限制 10 次**
    - 需要更谨慎地选择提交
@@ -115,25 +142,25 @@ Fold 3 测试集预测生成 ⏳ 待执行
 
 ### P0 — 立即
 
-1. 🔄 等待 DeBERTa-v3-large 后处理完成
-2. ⏳ 生成 Large 模型 VE 预测
-3. ⏳ 生成 Large VE 60% + Stacking V3 ridge+lgb 40% 提交
-4. ⏳ 提交到 Kaggle 验证
+1. ✅ DeBERTa-v3-large 首次提交完成 — 配置无效
+2. 🔄 重新训练 Large 模型 (调整训练配置)
+3. ⏳ 继续优化 Base 模型 VE 比例或其他方向
 
 ### P1 — 短期
-
-1. 分析 Large 模型 Kaggle 分数
-2. 如果 Large 模型更好，更新最佳配方
-3. 如果 Large 模型不佳，分析原因并调整策略
-
-### P2 — 中期
 
 1. 尝试更多 VE 比例 (65%, 70%, 75%)
 2. 尝试不同 Stacking 组合
 3. 考虑伪标签或数据增强
 
+### P2 — 中期
+
+1. 探索其他模型架构
+2. 尝试更长训练配置 (5f×5e) 对 Large 模型的影响
+3. 分析 Base 模型的改进空间
+
 ## 已验证无效的路径
 
+- ⏳ **DeBERTa-v3-large (3f×3e)** → Val RMSE 1.420, Kaggle 0.678 (首次配置无效，重新训练中)
 - ❌ 3M 数据增加 → 过拟合更严重
 - ❌ Graph features → 无显著影响
 - ❌ Ridge+LGB meta-learner → 边际改进 (-0.00009)

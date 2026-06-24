@@ -216,51 +216,68 @@
       </div>
 
       <!-- Submission History Table -->
-      <div style="margin-top: 20px;">
-        <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">Kaggle 提交排行榜 (Top 5 by Score) — 更新于 2026-06-23</div>
-        <table>
-          <thead>
-            <tr><th>#</th><th>文件名</th><th>RMSE</th><th>日期</th><th>详细说明</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>1</td>
-              <td>sub-deb1m-ve60-sv3rlg40.csv</td>
-              <td class="score-best">0.59770</td>
-              <td>6/20</td>
-              <td>🏆 1M VE 60% + Stacking V3 ridge+lgb 40% — NEW BEST</td>
-            </tr>
-            <tr>
-              <td>2</td>
-              <td>sub-deb1m-ve55-sv3rlg45.csv</td>
-              <td>0.59862</td>
-              <td>6/20</td>
-              <td>1M VE 55% + Stacking V3 ridge+lgb 45%</td>
-            </tr>
-            <tr>
-              <td>3</td>
-              <td>sub-deb1m-ve50-sv3rlg50.csv</td>
-              <td>0.60073</td>
-              <td>6/20</td>
-              <td>1M VE 50% + Stacking V3 ridge+lgb 50%</td>
-            </tr>
-            <tr>
-              <td>4</td>
-              <td>sub-deb1m-ve85-sv3rlg15.csv</td>
-              <td>0.61115</td>
-              <td>6/20</td>
-              <td>1M VE 85% + Stacking V3 ridge+lgb 15%</td>
-            </tr>
-            <tr>
-              <td>5</td>
-              <td>submission-deb1m-ve90-sv3-10.csv</td>
-              <td>0.61725</td>
-              <td>6/18</td>
-              <td>1M VE 90% + Stacking V3 ridge+lgb 10%</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div style="margin-top: 20px;">
+         <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">Kaggle 提交排行榜 (Top 5 by Score) — 更新于 2026-06-23 11:00</div>
+         <table>
+           <thead>
+             <tr><th>#</th><th>文件名</th><th>RMSE</th><th>日期</th><th>详细说明</th></tr>
+           </thead>
+           <tbody>
+             <tr>
+               <td>1</td>
+               <td>sub-deb1m-ve60-sv3rlg40.csv</td>
+               <td class="score-best">0.59770</td>
+               <td>6/20</td>
+               <td>🏆 1M VE 60% + Stacking V3 ridge+lgb 40% — NEW BEST</td>
+             </tr>
+             <tr>
+               <td>2</td>
+               <td>sub-deb1m-ve55-sv3rlg45.csv</td>
+               <td>0.59862</td>
+               <td>6/20</td>
+               <td>1M VE 55% + Stacking V3 ridge+lgb 45%</td>
+             </tr>
+             <tr>
+               <td>3</td>
+               <td>sub-deb1m-ve50-sv3rlg50.csv</td>
+               <td>0.60073</td>
+               <td>6/20</td>
+               <td>1M VE 50% + Stacking V3 ridge+lgb 50%</td>
+             </tr>
+             <tr>
+               <td>4</td>
+               <td>sub-deb1m-ve85-sv3rlg15.csv</td>
+               <td>0.61115</td>
+               <td>6/20</td>
+               <td>1M VE 85% + Stacking V3 ridge+lgb 15%</td>
+             </tr>
+             <tr>
+               <td>5</td>
+               <td>submission-deb1m-ve90-sv3-10.csv</td>
+               <td>0.61725</td>
+               <td>6/18</td>
+               <td>1M VE 90% + Stacking V3 ridge+lgb 10%</td>
+             </tr>
+           </tbody>
+         </table>
+         <div style="margin-top: 16px; padding: 12px; background: var(--bg); border-radius: 8px; border-left: 4px solid var(--yellow);">
+           <div style="font-size: 13px; color: var(--yellow); font-weight: 600; margin-bottom: 8px;">⚠️ DeBERTa-v3-large 首次提交结果 (2026-06-23)</div>
+           <table style="font-size: 12px;">
+             <thead>
+               <tr><th>文件名</th><th>RMSE</th><th>vs 最佳</th><th>说明</th></tr>
+             </thead>
+             <tbody>
+               <tr><td>sub-large-fold1-ve60-rlg40.csv</td><td class="score-bad">0.67785</td><td>+13.4%</td><td>Large fold1 VE 60% + RLG 40%</td></tr>
+               <tr><td>sub-large-fold1-ve-only.csv</td><td class="score-bad">0.77886</td><td>+30.3%</td><td>Large fold1 VE only (100%)</td></tr>
+               <tr><td>sub-large-ve60-rlg40.csv</td><td class="score-bad">1.07035</td><td>+79.1%</td><td>Large VE 60% + RLG 40%</td></tr>
+               <tr><td>sub-large-ve-only.csv</td><td class="score-bad">1.47286</td><td>+146.4%</td><td>Large VE only (100%)</td></tr>
+             </tbody>
+           </table>
+           <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+             <strong>结论:</strong> 首次训练配置 (3f×3e, BS=64) 无效，导致 Val RMSE 1.420 远高于 Base 的 1.117。<strong>状态: 🔄 重新训练中</strong>
+           </div>
+         </div>
+       </div>
     </div>
 
     <!-- 2. Model Performance -->
@@ -277,7 +294,7 @@
           <tbody>
             <tr><td>DeBERTa-v3-base (1M)</td><td>5f×5e, LoRA r=16</td><td>1.117</td><td class="score-best">0.598</td><td>🏆 最佳</td></tr>
             <tr><td>DeBERTa-v3-base (3M)</td><td>3f×3e, LoRA r=16</td><td>1.137</td><td>0.681</td><td>✅ 完成</td></tr>
-            <tr><td>DeBERTa-v3-large (3M)</td><td>3f×3e, LoRA r=32</td><td>1.420</td><td>—</td><td>🔄 后处理中</td></tr>
+            <tr><td>DeBERTa-v3-large (3M)</td><td>3f×3e, LoRA r=32</td><td>1.420</td><td>0.678</td><td>🔄 重新训练中</td></tr>
             <tr><td>Stacking V3 ridge+lgb</td><td>9 base models</td><td>—</td><td>—</td><td>✅ 完成</td></tr>
           </tbody>
         </table>
@@ -330,19 +347,24 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">Val RMSE</div>
-          <div class="metric-value" style="font-size: 16px; color: var(--yellow);">1.42045</div>
-          <div class="metric-status">Fold 3 Epoch 3</div>
+          <div class="metric-value" style="font-size: 16px; color: var(--red);">1.42045</div>
+          <div class="metric-status">❌ 远高于 Base 的 1.117</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">后处理状态</div>
-          <div class="metric-value" style="font-size: 16px; color: var(--yellow);">🔄 进行中</div>
-          <div class="metric-status">生成 OOF 和测试集预测</div>
+          <div class="metric-label">Kaggle 最佳</div>
+          <div class="metric-value" style="font-size: 16px; color: var(--red);">0.67785</div>
+          <div class="metric-status">❌ 比最佳差 13.4%</div>
         </div>
       </div>
       <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
         <p><strong>训练配置:</strong> 3M 数据, 3 folds × 3 epochs, BS=64, LoRA r=32, alpha=64, LR=3e-5</p>
         <p><strong>训练时间:</strong> ~6 小时/epoch, 总计 ~54 小时</p>
-        <p><strong>下一步:</strong> 生成 Large 模型预测，用 VE 60% + Stacking V3 ridge+lgb 40% 配方提交</p>
+        <p style="margin-top: 12px; padding: 10px; background: var(--bg); border-radius: 6px; border-left: 4px solid var(--yellow);">
+          <strong style="color: var(--yellow);">⚠️ 首次训练配置无效:</strong><br>
+          Large 模型使用 3f×3e 配置导致严重欠拟合。fold2 和 fold3 的 Val RMSE 均在 1.42 左右，远高于 Base 模型的 1.117。
+          原因分析：Large 模型参数量 (435M) 是 Base (86M) 的 5 倍，但训练配置 (3f×3e, BS=64) 不足以充分训练。
+          <strong>状态: 🔄 重新训练中</strong>
+        </p>
       </div>
     </div>
 
@@ -356,12 +378,12 @@
         <div class="risk-item critical">
           <div class="risk-title"><span>🔴</span><span>差距 26.2% 仍然巨大</span></div>
           <div class="risk-desc">我们 0.598 vs 第2名 Deepsick 0.474, 差距 0.124 (26.2%)。需要突破性改进。</div>
-          <div class="risk-plan">DeBERTa-v3-large 可能提供更好的语义理解，但 Val RMSE 1.420 高于 Base 的 1.117</div>
+          <div class="risk-plan">Base 模型 VE 60% + Stacking V3 ridge+lgb 40% 是当前最佳，需探索其他方向</div>
         </div>
-        <div class="risk-item">
-          <div class="risk-title"><span>🟡</span><span>Large 模型 Val RMSE 较高</span></div>
-          <div class="risk-desc">Large 模型 Val RMSE 1.420 vs Base 模型 1.117，可能过拟合或需要更多训练。</div>
-          <div class="risk-plan">等待测试集预测结果，如果 Kaggle 分数不佳，考虑调整训练配置</div>
+        <div class="risk-item" style="border-left-color: var(--yellow);">
+          <div class="risk-title"><span>🟡</span><span>Large 模型首次训练配置无效</span></div>
+          <div class="risk-desc">DeBERTa-v3-large (3f×3e) 提交 4 次，最佳 Kaggle 0.678，比 Base 差 13.4%。Val RMSE 1.420 远高于 Base 的 1.117。</div>
+          <div class="risk-plan">原因：fold2/fold3 训练参数配置 (3f×3e, BS=64) 不足以训练 435M 参数的 Large 模型。状态: 🔄 重新训练中</div>
         </div>
         <div class="risk-item">
           <div class="risk-title"><span>🟡</span><span>每日提交限制 10 次</span></div>
@@ -380,19 +402,19 @@
       <div style="font-size: 14px; color: var(--text-muted);">
         <p><strong>P0 — 立即:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>🔄 等待 DeBERTa-v3-large 后处理完成 (生成测试集预测)</li>
-          <li>⏳ 生成 Large 模型 VE 预测</li>
-          <li>⏳ 生成 Large VE 60% + Stacking V3 ridge+lgb 40% 提交</li>
-          <li>⏳ 提交到 Kaggle 验证</li>
+          <li>✅ DeBERTa-v3-large 首次提交完成 — 配置无效</li>
+          <li>🔄 重新训练 Large 模型 (调整训练配置)</li>
+          <li>⏳ 继续优化 Base 模型 VE 比例或其他方向</li>
         </ul>
         <p style="margin-top: 12px;"><strong>P1 — 短期:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>分析 Large 模型 Kaggle 分数</li>
-          <li>如果 Large 模型更好，更新最佳配方</li>
-          <li>如果 Large 模型不佳，分析原因并调整策略</li>
+          <li>尝试更多 VE 比例 (65%, 70%, 75%)</li>
+          <li>尝试不同 Stacking 组合</li>
+          <li>考虑伪标签或数据增强</li>
         </ul>
         <p style="margin-top: 12px;"><strong>已验证无效的路径:</strong></p>
         <ul style="margin-left: 20px; margin-top: 4px;">
+          <li>⏳ DeBERTa-v3-large (3f×3e) → 首次配置无效，重新训练中</li>
           <li>❌ 3M 数据增加 → 过拟合更严重</li>
           <li>❌ Graph features → 无显著影响</li>
           <li>❌ Ridge+LGB meta-learner → 边际改进 (-0.00009)</li>
@@ -404,7 +426,7 @@
   </div>
 
   <footer>
-    <p>最后更新：<span class="timestamp">2026-06-23 18:05</span></p>
+    <p>最后更新：<span class="timestamp">2026-06-23 11:00</span></p>
     <p style="margin-top: 8px; font-size: 13px;">技术看板由 AI 助手自动维护 | 每完成阶段性任务或指标变化时自动更新</p>
   </footer>
 </div>

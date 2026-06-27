@@ -1,29 +1,105 @@
-# COMP5434 Review Rating Prediction
+# COMP5434 Review Rating Prediction — Code Documentation
 
 Distributed review rating prediction system using PySpark, gradient boosting, and transformer-based embeddings.
 
-## Project Overview
+## Final Technical Solution
 
-This project predicts review ratings (1–5 stars) for e-commerce product reviews using a hybrid approach:
+### Best Model: DeBERTa-v3-base + Stacking V3 Ensemble
 
-- **PySpark** for distributed data processing and feature engineering
-- **Gradient boosting** (LightGBM, XGBoost, CatBoost) for tabular features
-- **Transformer embeddings** (Sentence-BERT) for text features
-- **Ensemble methods** to combine models for final predictions
+| Component | Configuration | Kaggle RMSE |
+|-----------|---------------|-------------|
+| DeBERTa-v3-base | 1M subsample, 5f×5e, LoRA r=16 | 0.638 (VE only) |
+| Stacking V3 ridge+lgb | 9 base models | — |
+| **Final Blend** | **VE 60% + Stacking V3 rlg 40%** | **0.59770** |
 
-The system processes ~3M training reviews, engineers user/product/text features, and produces Kaggle submissions.
+### Model Architecture
 
-## Hardware Requirements
+```
+DeBERTa-v3-base (86M params)
+├── LoRA adaptation (r=16, alpha=32)
+│   ├── query_proj
+│   └── value_proj
+├── Mean pooling
+└── Classifier (1024 → 4 logits for CORAL loss)
+```
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| CPU | 4 cores | 8+ cores |
-| RAM | 8 GB | 16+ GB |
-| GPU | None (CPU training) | 1x NVIDIA (CUDA 11.8+) |
-| Disk | 10 GB free | 20+ GB free |
-| Spark | Local mode | Local mode (pseudo-distributed) |
+### Training Configuration
 
-**Note**: PySpark runs in local mode with `spark.master=local[*]`. GPU accelerates transformer embedding extraction but is not required.
+```python
+# DeBERTa-v3-base (1M)
+MODEL_NAME = "microsoft/deberta-v3-base"
+LORA_R, LORA_ALPHA = 16, 32
+LORA_TARGET = ["query_proj", "value_proj"]
+N_FOLDS, N_EPOCHS = 5, 5
+BATCH_SIZE, GRAD_ACCUM = 32, 8
+LR = 1e-5
+```
+
+### Variance Expansion (VE)
+
+```python
+def variance_expansion(pred, target_std=1.422, target_mean=3.941):
+    """Expand compressed DeBERTa predictions to match target distribution"""
+    ve = (pred - pred.mean()) / pred.std() * target_std + target_mean
+    return np.clip(ve, 1.0, 5.0)
+```
+
+### Final Blending
+
+```python
+# Load predictions
+deberta_pred = np.load("artifacts/models/deberta_lora_fold1_test.npy")
+stacking_rlg = np.load("artifacts/models/stacking_v3_ridge+lgb_test.npy")
+
+# Apply VE to DeBERTa predictions
+ve_pred = variance_expansion(deberta_pred)
+
+# Blend: VE 60% + Stacking V3 ridge+lgb 40%
+final_pred = 0.60 * ve_pred + 0.40 * stacking_rlg
+```
+
+## Project Structure
+
+```
+code/
+├── README.md           # This file
+├── requirements.txt    # Python dependencies
+├── config.py           # Configuration constants
+├── etl/                # Data extraction & cleaning
+│   ├── main.py         # ETL entry point
+│   └── ...
+├── features/           # Feature engineering pipelines
+│   ├── main.py         # Feature engineering entry point
+│   └── ...
+├── models/             # Model training & prediction
+│   ├── deberta_lora_1m.py      # DeBERTa-v3-base training (1M, 5f×5e)
+│   ├── deberta_large_full.py   # DeBERTa-v3-large training
+│   ├── stacking_v3.py          # Stacking V3 meta-learner
+│   └── ...
+├── ensemble/           # Ensemble and blending scripts
+│   ├── stacking_v3.py          # Stacking V3 implementation
+│   └── generate_large_submissions.py
+├── ablation/           # Ablation experiments
+├── utils/              # Shared utilities
+├── tests/              # Test suite
+└── kaggle/             # Kaggle submission generation
+```
+
+## Key Scripts
+
+### Model Training
+
+| Script | Description | Usage |
+|--------|-------------|-------|
+| `deberta_lora_1m.py` | DeBERTa-v3-base LoRA (1M, 5f×5e) | `python code/models/deberta_lora_1m.py` |
+| `deberta_large_full.py` | DeBERTa-v3-large LoRA (3M, 3f×3e) | `python code/models/deberta_large_full.py` |
+| `stacking_v3.py` | Stacking V3 meta-learner | `python code/ensemble/stacking_v3.py` |
+
+### Prediction Generation
+
+| Script | Description | Usage |
+|--------|-------------|-------|
+| `generate_large_submissions.py` | Generate Large model submissions | `python code/ensemble/generate_large_submissions.py` |
 
 ## Dependencies
 
@@ -37,14 +113,12 @@ Key packages:
 - `pyspark==3.4.1` — Distributed data processing
 - `torch>=2.0` — Deep learning framework
 - `transformers>=4.30` — Pre-trained language models
-- `sentence-transformers>=2.2` — Sentence embeddings
+- `peft>=0.5` — LoRA adaptation
 - `lightgbm>=4.0` — Gradient boosting
 - `xgboost>=1.7` — Gradient boosting
 - `catboost>=1.2` — Gradient boosting
 - `pandas>=2.0` — Data manipulation
 - `scikit-learn>=1.3` — ML utilities
-- `mlflow>=2.5` — Experiment tracking
-- `optuna>=3.3` — Hyperparameter optimization
 
 ## Data Setup
 
@@ -62,7 +136,7 @@ Key packages:
 
 ## How to Run
 
-### Step-by-step reproduction:
+### Full Pipeline
 
 ```bash
 # 1. Install dependencies
@@ -77,115 +151,65 @@ bash code/run.sh features     # Feature engineering
 bash code/run.sh train        # Model training
 bash code/run.sh predict      # Generate predictions
 bash code/run.sh submit       # Create Kaggle submission CSV
-bash code/run.sh ablation     # Run ablation experiments
 ```
 
-### Quick help:
+### DeBERTa Training
 
 ```bash
-bash code/run.sh --help
+# Train DeBERTa-v3-base (1M, 5f×5e)
+python code/models/deberta_lora_1m.py
+
+# Train DeBERTa-v3-large (3M, 3f×3e)
+python code/models/deberta_large_full.py
 ```
 
-## Stage-by-stage Guide
-
-### Stage 1: ETL (`code/etl/`)
-- Reads raw CSV files into Spark DataFrames
-- Handles missing values (title, comment, price, votes)
-- Type conversions and data cleaning
-- Outputs cleaned Parquet files to `artifacts/etl/`
-
-### Stage 2: Features (`code/features/`)
-- **Text features**: TF-IDF, sentence-transformer embeddings
-- **User features**: Average rating, review count, rating variance
-- **Product features**: Average rating, review count, category stats
-- **Time features**: Hour, weekday, month, days since first review
-- **Cross features**: User-product interaction statistics
-- Outputs assembled feature vectors to `artifacts/features/`
-
-### Stage 3: Training (`code/models/`)
-- Trains multiple models: LightGBM, XGBoost, CatBoost
-- Hyperparameter tuning via Optuna
-- Cross-validation with RMSE metric
-- Model selection and ensemble weighting
-- Saves models to `artifacts/models/`
-
-### Stage 4: Prediction (`code/models/`)
-- Loads trained models
-- Generates predictions on test set
-- Outputs raw predictions to `artifacts/predictions/`
-
-### Stage 5: Submission (`code/kaggle/`)
-- Formats predictions into `submission.csv`
-- Validates submission format
-- Ready for Kaggle upload
-
-### Stage 6: Ablation (`code/ablation/`)
-- Tests contribution of each feature group
-- Measures impact of different models
-- Produces ablation results table for report
-
-## Ablation Experiments
-
-Run ablation studies to evaluate feature/model contributions:
+### Stacking Ensemble
 
 ```bash
-bash code/run.sh ablation
+# Train Stacking V3 meta-learner
+python code/ensemble/stacking_v3.py
 ```
 
-Experiments include:
-- Text features only vs. full feature set
-- Individual model performance comparison
-- Ensemble vs. single model
-- Hyperparameter sensitivity analysis
+## Known Issues
 
-Results are saved to `artifacts/ablation/` and logged to MLflow.
+### Gradient Checkpointing vs LoRA
 
-## Website
+`gradient_checkpointing_enable()` is incompatible with LoRA when input tensors are integers (no `requires_grad`). This causes LoRA B weights to remain zero.
 
-Presentation website files are in `code/website/`. Build and view locally:
+**Solution**: Do NOT use gradient checkpointing with LoRA.
 
-```bash
-# If using a static site generator, build from code/website/
-# Otherwise, open index.html directly in browser
-```
+### Batch Size Limitations
 
-## Tests
+- DeBERTa-v3-large without gradient checkpointing: max batch_size=8 (12GB GPU)
+- DeBERTa-v3-base: batch_size=32 works fine
 
-Run the test suite:
+## Experiments
 
-```bash
-pytest code/tests/ -v
-```
+### VE Ratio Optimization
 
-Tests cover:
-- Data schema validation
-- Feature engineering pipeline correctness
-- Model prediction range validation
-- Submission format compliance
+| VE% | V3 rlg% | Kaggle RMSE |
+|-----|---------|-------------|
+| 90% | 10% | 0.61725 |
+| 85% | 15% | 0.61115 |
+| 50% | 50% | 0.60073 |
+| 55% | 45% | 0.59862 |
+| **60%** | **40%** | **0.59770** |
+| 30% | 70% | 0.62090 |
 
-## Project Structure
+### Ablation Studies
 
-```
-code/
-├── README.md           # This file
-├── requirements.txt    # Python dependencies
-├── run.sh              # Main entry point
-├── config.py           # Configuration constants
-├── etl/                # Data extraction & cleaning
-├── features/           # Feature engineering pipelines
-├── models/             # Model training & prediction
-├── ablation/           # Ablation experiments
-├── utils/              # Shared utilities
-├── tests/              # Test suite
-├── website/            # Presentation website
-└── kaggle/             # Kaggle submission generation
-```
+| Experiment | Kaggle RMSE | vs Baseline |
+|------------|-------------|-------------|
+| Baseline (V2 Ridge) | 0.61734 | — |
+| + Graph features | 0.61746 | +0.00012 |
+| + Ridge+LGB meta-learner | 0.61725 | -0.00009 |
+| 3M BS=16×16 | 0.74265 | +0.12531 |
+| 1M + 3f×3e | 1.53602 | +0.91868 |
 
 ## Team
 
-- **Team Name**: [Team Name]
-- **Members**: [Member 1], [Member 2], [Member 3]
 - **Course**: COMP5434 Big Data Computing, PolyU 2026
+- **Kaggle Competition**: [COMP5434 Project](https://www.kaggle.com/t/9e897d08dba249bb8a1312666e8ef8fd)
 
 ## License
 

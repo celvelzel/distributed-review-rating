@@ -25,12 +25,12 @@ CKPT_DIR = os.path.join(MODEL_DIR, "checkpoints_large_full_r16")
 os.makedirs(CKPT_DIR, exist_ok=True)
 
 MODEL_NAME = "microsoft/deberta-v3-large"
-LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.02  # Changed from 32 to 16
-LORA_TARGET = ["query_proj", "value_proj"]  # Same as fold1
+LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.05  # EXACT same as original fold1 script
+LORA_TARGET = ["query_proj", "value_proj"]  # EXACT same as original fold1 script
 N_CLASSES, N_TASKS = 5, 4
 N_FOLDS, N_EPOCHS = 3, 3
-BATCH_SIZE, GRAD_ACCUM = 64, 4
-LR, WEIGHT_DECAY, WARMUP_RATIO = 3e-5, 0.01, 0.1
+BATCH_SIZE, GRAD_ACCUM = 8, 32  # batch_size=8 to avoid OOM (effective batch=256)
+LR, WEIGHT_DECAY, WARMUP_RATIO = 1e-5, 0.01, 0.1  # EXACT same as original fold1 script
 R_DROP_ALPHA, FP16, PATIENCE = 0.5, True, 3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -51,7 +51,7 @@ class DeBERTaLoRA(nn.Module):
         cfg = LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA, target_modules=LORA_TARGET,
                          lora_dropout=LORA_DROPOUT, bias="none")
         self.backbone = get_peft_model(base, cfg)
-        self.backbone.gradient_checkpointing_enable()
+        # NO gradient checkpointing - this was the bug! Original fold1 script didn't have it.
         self.dropout = nn.Dropout(0.1)
         self.classifier = nn.Linear(base.config.hidden_size, N_TASKS)
         self.backbone.print_trainable_parameters()
@@ -113,6 +113,26 @@ def main():
     fold1_test = np.load(os.path.join(MODEL_DIR, "deberta_large_fold1_test.npy"))
     print(f"Loaded fold1 predictions: mean={fold1_test.mean():.4f}, std={fold1_test.std():.4f}", flush=True)
 
+    # Resume logic
+    resume_fold = 2  # Start from fold 2
+    resume_epoch = 0
+    latest_file = os.path.join(CKPT_DIR, "latest.txt")
+    if os.path.exists(latest_file):
+        ckpt_name = open(latest_file).read().strip()
+        ckpt_path = os.path.join(CKPT_DIR, ckpt_name)
+        if os.path.exists(ckpt_path):
+            ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+            done_fold = ckpt["fold"]
+            done_epoch = ckpt["epoch"]
+            if done_epoch >= N_EPOCHS:
+                resume_fold = done_fold + 1
+                resume_epoch = 0
+                print(f"Fold {done_fold} fully done -> start fold {resume_fold}", flush=True)
+            else:
+                resume_fold = done_fold
+                resume_epoch = done_epoch
+                print(f"Fold {done_fold} epoch {done_epoch}/{N_EPOCHS} done -> resume from epoch {resume_epoch + 1}", flush=True)
+
     # Prepare
     oof = np.zeros(len(y_train), dtype=np.float32)
     test_preds_list = [fold1_test]  # Start with fold1
@@ -122,6 +142,10 @@ def main():
     for fi, (tr_idx, va_idx) in enumerate(kf.split(input_ids), 1):
         if fi == 1:
             print(f"Skipping fold 1 (already done with r=16)", flush=True)
+            continue
+
+        if fi < resume_fold:
+            print(f"Skipping fold {fi} (already done)", flush=True)
             continue
 
         print(f"\n{'='*60}\nFold {fi}/{N_FOLDS}\n{'='*60}", flush=True)
@@ -142,11 +166,24 @@ def main():
         sched = get_cosine_schedule_with_warmup(opt, int(steps*N_EPOCHS*WARMUP_RATIO), steps*N_EPOCHS)
         scaler = GradScaler("cuda", enabled=FP16)
 
+        # Load optimizer/scheduler state if resuming mid-fold
+        start_epoch = 1
+        if fi == resume_fold and resume_epoch > 0:
+            resume_ckpt_path = os.path.join(CKPT_DIR, f"fold{fi}_epoch{resume_epoch}.pt")
+            if os.path.exists(resume_ckpt_path):
+                r_ckpt = torch.load(resume_ckpt_path, map_location="cpu", weights_only=False)
+                model.load_state_dict(r_ckpt["model_state_dict"])
+                opt.load_state_dict(r_ckpt["optimizer_state_dict"])
+                sched.load_state_dict(r_ckpt["scheduler_state_dict"])
+                scaler.load_state_dict(r_ckpt["scaler_state_dict"])
+                start_epoch = resume_epoch + 1
+                print(f"  Loaded fold{fi}_epoch{resume_epoch} state, starting from epoch {start_epoch}", flush=True)
+
         best_rmse = float("inf")
         best_state = None
         patience = 0
 
-        for ep in range(1, N_EPOCHS + 1):
+        for ep in range(start_epoch, N_EPOCHS + 1):
             model.train()
             opt.zero_grad(set_to_none=True)
             t0 = time.time()

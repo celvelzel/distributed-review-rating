@@ -43,20 +43,22 @@ MAX_FEATURES = 5000
 NUM_BOOST_ROUND = 150
 EARLY_STOPPING_ROUNDS = 20
 
+# XGBoost 参数: tree_method="hist" 使用直方图近似加速分裂（CPU 高效）;
+# colsample_bytree=0.6 列采样增加多样性; max_depth=6 控制树深度防过拟合
 XGB_PARAMS = {
-    "objective": "reg:squarederror",
+    "objective": "reg:squarederror",  # 回归任务，优化 MSE
     "eval_metric": "rmse",
     "learning_rate": 0.15,
     "max_depth": 6,
-    "subsample": 0.8,
-    "colsample_bytree": 0.6,
-    "reg_alpha": 0.1,
-    "reg_lambda": 1.0,
+    "subsample": 0.8,  # 行采样比例
+    "colsample_bytree": 0.6,  # 列采样比例
+    "reg_alpha": 0.1,  # L1 正则化
+    "reg_lambda": 1.0,  # L2 正则化
     "min_child_weight": 5,
-    "tree_method": "hist",
-    "max_bin": 128,
+    "tree_method": "hist",  # 直方图近似法，训练速度快于 exact
+    "max_bin": 128,  # 直方图分桶数，越小越快但精度略降
     "seed": RANDOM_SEED,
-    "nthread": -1,
+    "nthread": -1,  # 使用所有 CPU 线程
     "verbosity": 0,
 }
 
@@ -87,7 +89,7 @@ def train_xgb_oof(
     test_preds = np.zeros(n_test, dtype=np.float32)
     fold_rmses: List[float] = []
 
-    # Convert test set to DMatrix once (small, 10K rows)
+    # 测试集只需转一次 DMatrix（小数据量 10K 行）
     dtest = xgb.DMatrix(X_test)
 
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_SEED)
@@ -96,10 +98,11 @@ def train_xgb_oof(
         print(f"\n  ── Fold {fold_idx}/{n_folds} "
               f"(train={len(tr_idx):,}, val={len(va_idx):,}) ──")
 
-        # Create DMatrix for this fold (sparse slicing is efficient)
+        # DMatrix 是 XGBoost 的高效稀疏数据结构，支持快速切片
         dtrain = xgb.DMatrix(X_all[tr_idx], label=y_all[tr_idx])
         dval = xgb.DMatrix(X_all[va_idx], label=y_all[va_idx])
 
+        # early_stopping_rounds: 验证集 20 轮无提升则停止，防止过拟合
         model = xgb.train(
             params,
             dtrain,
@@ -117,7 +120,7 @@ def train_xgb_oof(
         fold_rmses.append(fold_rmse)
         print(f"  Fold {fold_idx} RMSE: {fold_rmse:.5f}  (best_iter={best_iter})")
 
-        # Test predictions (accumulate for averaging)
+        # 测试集预测累加并除以 n_folds，等价于 5 折模型平均（降低方差）
         test_preds += np.clip(
             model.predict(dtest, iteration_range=(0, best_iter + 1)), 1.0, 5.0
         ) / n_folds
@@ -143,7 +146,7 @@ def main() -> None:
     test_df = pd.read_parquet(TEST_PATH)
     print(f"  train: {len(train_df):,} rows  |  test: {len(test_df):,} rows")
 
-    # 2. Build TF-IDF features ──────────────────────────────────────────
+    # 2. 构建 TF-IDF 特征 ──────────────────────────────────────────────
     print(f"\n[2/4] Extracting TF-IDF features (max_features={MAX_FEATURES}) …")
     train_texts = _combine_text(train_df)
     test_texts = _combine_text(test_df)

@@ -47,7 +47,8 @@ DOCS_DIR = ROOT / "docs" / "changelog"
 RANDOM_SEED = 42
 N_FOLDS = 5
 
-# ── Base model registry ──
+# ── 基模型注册表 (9 个): 每个模型提供 OOF 和测试预测两列 ──
+# 来源: stacking_v2 原有 6 个 + ensemble_diverse 1 个 + 图特征模型 2 个
 BASE_MODELS = {
     # Stacking v2 originals
     "lgb_tfidf": {"oof": MODEL_DIR / "lgb_tfidf_oof.npy", "test": MODEL_DIR / "lgb_tfidf_test.npy"},
@@ -86,7 +87,8 @@ def load_data():
 
 
 def load_oof_predictions(log):
-    """Load all base model OOF/test predictions. Skip if file missing or shape mismatch."""
+    """加载所有基模型的 OOF/测试预测，跳过缺失文件或形状不匹配的模型。"""
+    # 构建 OOF 矩阵: 每列是一个基模型的 OOF 预测，行数 = 训练集大小
     oof_dict, test_dict = {}, {}
     y_len = np.load(str(FEAT_DIR / "y_train.npy")).shape[0]
     skipped = []
@@ -120,7 +122,12 @@ def load_oof_predictions(log):
 
 
 def stacking_ridge(oof_dict, test_dict, y_train, model_names, log, alpha=1.0):
-    """Ridge regression meta-learner."""
+    """Ridge 回归元学习器，5 折 OOF 评估。
+
+    将基模型 OOF 预测作为特征，拟合 Ridge 回归学习最优混合权重。
+    使用独立的 KFold（非基模型的 fold）生成元学习器的 OOF，防止对基模型训练预测过拟合。
+    测试预测 = 5 折模型预测的平均（类似 bagging）。
+    """
     X_meta_train = np.column_stack([oof_dict[n] for n in model_names]).astype(np.float32)
     X_meta_test = np.column_stack([test_dict[n] for n in model_names]).astype(np.float32)
 
@@ -141,10 +148,10 @@ def stacking_ridge(oof_dict, test_dict, y_train, model_names, log, alpha=1.0):
 
         coefs = {n: float(c) for n, c in zip(model_names, ridge.coef_)}
         fold_coefs.append(coefs)
+        # Test predictions: each fold's model predicts on the full test set.
+        # Averaging across folds reduces variance in the final test predictions,
+        # analogous to bagging the meta-learner.
         test_preds += np.clip(ridge.predict(X_meta_test), 1.0, 5.0) / N_FOLDS
-
-        coefs_str = {n: f"{c:.4f}" for n, c in coefs.items()}
-        log.print(f"    Ridge fold {fold_idx}: RMSE={fold_rmse:.5f}  coefs={coefs_str}")
 
     oof_rmse = float(np.sqrt(np.mean((oof_preds - y_train) ** 2)))
     # Average coefficients across folds
@@ -350,6 +357,8 @@ def main():
     meta_details["elasticnet"] = enet_detail
 
     log.print("\n--- [5/5] Ridge + LGB blend ---")
+    # 网格搜索 Ridge 与 LGB 元学习器的混合权重 (0%~100% Ridge)
+    # Ridge 稳定（线性低方差）+ LGB 捕捉非线性交互，混合可能优于任一单独模型
     best_blend_rmse = float("inf")
     best_w = 0.5
     for w100 in range(0, 101):
@@ -367,7 +376,7 @@ def main():
     meta_details["ridge+lgb"] = {"best_ridge_weight": best_w, "oof_rmse": best_blend_rmse}
     log.print(f"  Ridge+LGB best: w_ridge={best_w:.2f}, RMSE={best_blend_rmse:.5f}")
 
-    # ── Select best ──
+    # ── 自动选择: 取 OOF RMSE 最低的元学习器作为最终 stacking 输出 ──
     log.print(f"\n{'=' * 70}")
     log.print("--- Results summary ---")
     best_name = None
@@ -401,7 +410,9 @@ def main():
         log.print(f"    max|diff|  = {v2_compare['max_abs_diff']:.5f}")
         log.print(f"    corr       = {v2_compare['correlation']:.6f}")
 
-    # ── Simulate DeBERTa blends (for pre-submission estimation) ──
+    # ── 模拟 DeBERTa 混合（提交前预估）──
+    # VE: 将 DeBERTa 预测的方差/均值对齐到训练目标分布，改善 RMSE
+    # 混合: w% DeBERTa_VE + (100-w)% Stacking_v3，扫描不同权重
     log.print(f"\n--- DeBERTa 1M blend simulation ---")
     deb_path = MODEL_DIR / "deberta_lora_fold1_test.npy"
     blend_sim = {}
@@ -409,6 +420,7 @@ def main():
         deb_test = np.load(str(deb_path)).astype(np.float32)
         target_std, target_mean = y_train.std(), y_train.mean()
         scale = target_std / deb_test.std()
+        # Apply VE: centre → scale → shift, then clip to valid rating range
         deb_ve = np.clip((deb_test - deb_test.mean()) * scale + target_mean, 1.0, 5.0)
         log.print(f"  DeBERTa 1M fold1: mean={deb_test.mean():.4f}, std={deb_test.std():.4f}")
         log.print(f"  After VE:         mean={deb_ve.mean():.4f}, std={deb_ve.std():.4f}, scale={scale:.4f}")

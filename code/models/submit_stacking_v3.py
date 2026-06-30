@@ -58,7 +58,13 @@ def main():
         stack_v2_test = np.load(str(stack_v2_path)).astype(np.float32)
         print(f"  Stacking v2:      mean={stack_v2_test.mean():.4f}, std={stack_v2_test.std():.4f}")
 
-    # ── Variance Expansion on DeBERTa ──
+    # ── 对 DeBERTa 预测做方差扩展 (Variance Expansion) ──
+    # VE 公式: ve = (pred - pred_mean) * (target_std / pred_std) + target_mean
+    # 1. 中心化: 减去预测均值，消除模型偏差
+    # 2. 缩放: 乘以 target_std/pred_std，拉伸到与训练目标相同的方差
+    # 3. 平移: 加上 target_mean，恢复正确的中心位置
+    # 4. 裁剪到 [1, 5] 合法评分范围
+    # DeBERTa 预测方差偏小（欠分散），VE 拉伸后能改善 RMSE
     target_std = y_train.std()
     target_mean = y_train.mean()
     pred_std = deb_test.std()
@@ -73,10 +79,12 @@ def main():
 
     submissions = {}
 
-    # 1. Stacking v3 standalone (diagnostic)
+    # 1. Stacking v3 standalone (diagnostic — shows how v3 performs alone)
     submissions["stacking-v3-standalone"] = np.clip(stack_v3_test, 1.0, 5.0)
 
-    # 2. DeBERTa VE + Stacking v3 blends
+    # 2. DeBERTa VE + Stacking v3 混合 — 主要提交候选
+    # 混合公式: blend = w_deb% * deb_ve + (100-w_deb)% * stack_v3
+    # 90/10 配比复现了 0.61734 的最佳 Kaggle 成绩（DeBERTa 90% + Stacking v2 10%）
     for w_deb in [95, 90, 85, 80, 75]:
         w_stack = 100 - w_deb
         name = f"deb1m-ve{w_deb}-sv3-{w_stack}"
@@ -84,7 +92,8 @@ def main():
         submissions[name] = blend
         print(f"  {name}: mean={blend.mean():.4f}, std={blend.std():.4f}")
 
-    # 3. Baseline: DeBERTa VE + Stacking v2 (the 0.61734 recipe)
+    # 3. Baseline: DeBERTa VE + Stacking v2 (the 0.61734 recipe) — included
+    # as a sanity check that should reproduce the known-good Kaggle score.
     if stack_v2_test is not None:
         for w_deb in [90, 85]:
             w_stack = 100 - w_deb
@@ -93,11 +102,11 @@ def main():
             submissions[name] = blend
             print(f"  {name}: mean={blend.mean():.4f}, std={blend.std():.4f}  (baseline)")
 
-    # 4. DeBERTa VE only (no blend)
+    # 4. DeBERTa VE only (no blend) — pure DeBERTa baseline after variance expansion
     submissions["deb1m-ve-only"] = deb_ve
     print(f"  deb1m-ve-only: mean={deb_ve.mean():.4f}, std={deb_ve.std():.4f}")
 
-    # ── Save all ──
+    # ── 保存所有提交 CSV (id, rating 两列) ──
     print(f"\n{'=' * 60}")
     print("Saving CSVs...")
     for name, preds in submissions.items():

@@ -36,7 +36,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 RANDOM_SEED = 42
 N_FOLDS = 5
 
-# Columns to exclude in the "safe" variant
+# "安全"变体排除的列: user_cat_avg_rating 和 user_cat_deviation 含评分统计，存在泄露风险
 LEAKAGE_COLS = {"user_cat_avg_rating", "user_cat_deviation"}
 
 
@@ -46,7 +46,7 @@ def load_data():
     test_df = pd.read_csv(os.path.join(PROJECT_ROOT, "data", "test.csv"))
     y = train_df["rating"].values.astype(np.float32)
 
-    # Expanded graph features
+    # 加载扩展图特征: 含 LightGCN 嵌入 + 用户/产品图统计量
     exp_train = pd.read_parquet(os.path.join(FEAT_DIR, "expanded_graph_train.parquet"))
     exp_test = pd.read_parquet(os.path.join(FEAT_DIR, "expanded_graph_test.parquet"))
 
@@ -84,7 +84,7 @@ def load_data():
     X_all = pd.DataFrame(features_train)
     X_test_all = pd.DataFrame(features_test)
 
-    # Interaction features
+    # 交互特征: 用户宽裕度×评论数、类别偏差×评论数、用户-产品评分差
     for X in [X_all, X_test_all]:
         if "user_leniency" in X.columns and "user_num_reviews_oof" in X.columns:
             X["leniency_x_reviews"] = X["user_leniency"] * X["user_num_reviews_oof"]
@@ -100,7 +100,7 @@ def load_data():
     print(f"  Full feature set: {X_all.shape[1]} columns")
     print(f"  Features: {list(X_all.columns)}")
 
-    # Safe variant (exclude leakage columns)
+    # 安全变体: 排除含评分统计的泄露列，仅保留无泄露的图特征
     safe_cols = [c for c in X_all.columns if c not in LEAKAGE_COLS]
     X_safe = X_all[safe_cols]
     X_test_safe = X_test_all[safe_cols]
@@ -258,6 +258,8 @@ def main():
     print(f"  XGBoost (safe):  OOF RMSE = {xgb_safe_rmse:.5f}  test: mean={xgb_safe_test.mean():.4f}, std={xgb_safe_test.std():.4f}")
     print(f"  LightGBM (full): OOF RMSE = {lgb_full_rmse:.5f}  test: mean={lgb_full_test.mean():.4f}, std={lgb_full_test.std():.4f}")
     print(f"  LightGBM (safe): OOF RMSE = {lgb_safe_rmse:.5f}  test: mean={lgb_safe_test.mean():.4f}, std={lgb_safe_test.std():.4f}")
+    # 泄露影响分析: full vs safe 的 RMSE 差值
+    # 负差值 = 泄露在本地有帮助但可能在 Kaggle 上反而有害
     print(f"\n  Leakage impact: full vs safe RMSE delta:")
     print(f"    XGBoost:  {xgb_full_rmse - xgb_safe_rmse:+.5f}")
     print(f"    LightGBM: {lgb_full_rmse - lgb_safe_rmse:+.5f}")

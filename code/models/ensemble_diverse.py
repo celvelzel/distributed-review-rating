@@ -11,9 +11,9 @@ Strategy: Simple weighted average ensemble.
   - Evaluates via OOF RMSE
   - Saves best ensemble test predictions
 
-Diversity sources:
-  - LGB vs XGBoost: same features, different algorithms (tree vs gradient boosted)
-  - MLP: completely different feature space (BERT embeddings vs TF-IDF)
+Diversity sources (多样性来源):
+  - LGB vs XGBoost: 相同 TF-IDF 特征，不同算法（树分裂 vs 梯度提升）
+  - MLP: 完全不同的特征空间（BERT 嵌入 vs TF-IDF），提供正交信号
 """
 
 from __future__ import annotations
@@ -243,7 +243,7 @@ def main() -> None:
     # Load test IDs
     test_ids = pd.read_parquet(TEST_PATH, columns=["id"])["id"].values
 
-    # ── 2. Generate LightGBM OOF via char TF-IDF 5-fold CV ─────────────
+    # ── 2. 生成 LightGBM OOF: 若已有缓存则加载，否则用字符级 TF-IDF 5 折 CV 生成 ──
     if LGB_OOF_PATH.exists() and LGB_TEST_PATH.exists():
         print("\n[2/5] Loading existing LightGBM OOF …")
         lgb_oof = np.load(str(LGB_OOF_PATH)).astype(np.float32)
@@ -306,13 +306,13 @@ def main() -> None:
         "inverse_rmse": None,  # computed below
     }
 
-    # Compute inverse-RMSE weights (higher weight for lower RMSE)
+    # 逆 RMSE 加权: RMSE 越低（越好）的模型权重越高
     rmse_vals = np.array([lgb_oof_rmse, xgb_oof_rmse, mlp_oof_rmse])
     inv_weights = (1.0 / rmse_vals)
     inv_weights /= inv_weights.sum()
     weight_configs["inverse_rmse"] = inv_weights
 
-    # Fine grid search around MLP-heavy region
+    # 精细网格搜索: MLP 权重 50%-100%，LGB 权重 0%-50%，寻找最优组合
     print("  Running fine grid search …")
     best_grid_rmse = float("inf")
     best_grid_weights = None

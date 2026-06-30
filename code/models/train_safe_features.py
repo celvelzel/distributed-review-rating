@@ -166,7 +166,7 @@ def _compute_test_sentiment(test_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_dense_features() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Load dense safe features (sentiment + product_metadata)."""
+    """加载稠密安全特征: 情感分析 (17列) + 产品元数据 (8列)，无目标泄露。"""
     log.info("Loading dense safe features (sentiment + product_metadata)")
 
     log.info("  [1/3] Loading sentiment features …")
@@ -205,7 +205,7 @@ def load_dense_features() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarra
 
 
 def load_tfidf_features() -> Tuple[sp.csr_matrix, sp.csr_matrix]:
-    """Generate word-level TF-IDF features (sparse, much sparser than char-level)."""
+    """生成词级 TF-IDF 特征 (稀疏矩阵，比字符级稀疏得多，节省内存)。"""
     log.info(f"Generating word-level TF-IDF (max_features={TFIDF_MAX_FEATURES})")
 
     train_df = pd.read_parquet(ETL_DIR / "train.parquet", columns=["title", "comment"])
@@ -216,6 +216,8 @@ def load_tfidf_features() -> Tuple[sp.csr_matrix, sp.csr_matrix]:
     del train_df, test_df
     gc.collect()
 
+    # 词级 TF-IDF: ngram_range=(1,2) 含单字和双字; max_features=2000 控制维度
+    # sublinear_tf 用 1+log(tf) 替代原始词频，降低高频词影响
     vectorizer = TfidfVectorizer(
         max_features=TFIDF_MAX_FEATURES,
         sublinear_tf=True,
@@ -242,7 +244,7 @@ def train_lgb_oof(
     n_folds: int = N_FOLDS,
     tag: str = "",
 ) -> Tuple[np.ndarray, np.ndarray, list]:
-    """Train LightGBM with 5-fold OOF."""
+    """LightGBM 5 折 OOF 训练。"""
     import lightgbm as lgb
 
     log.info(f"\n{'=' * 60}")
@@ -305,7 +307,7 @@ def train_xgb_oof(
     n_folds: int = N_FOLDS,
     tag: str = "",
 ) -> Tuple[np.ndarray, np.ndarray, list]:
-    """Train XGBoost with 5-fold OOF (dense features only)."""
+    """XGBoost 5 折 OOF 训练（仅稠密特征）。"""
     import xgboost as xgb
 
     log.info(f"\n{'=' * 60}")
@@ -379,7 +381,7 @@ def train_catboost_oof(
     n_folds: int = N_FOLDS,
     tag: str = "",
 ) -> Tuple[np.ndarray, np.ndarray, list]:
-    """Train CatBoost with 5-fold OOF (dense features only)."""
+    """CatBoost 5 折 OOF 训练（仅稠密特征）。"""
     from catboost import CatBoostRegressor, Pool
 
     log.info(f"\n{'=' * 60}")
@@ -522,7 +524,7 @@ def main() -> None:
     del X_train_tfidf, X_test_tfidf
     gc.collect()
 
-    # ── PART 3: Ensemble ────────────────────────────────────────────
+    # ── 第三部分: 集成（4 个模型简单平均）──
     log.info("\n" + "=" * 60)
     log.info("PART 3: Ensemble (average of 4 models)")
     log.info("=" * 60)

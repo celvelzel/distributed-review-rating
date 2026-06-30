@@ -28,23 +28,23 @@ class RatingMLP(nn.Module):
     def __init__(self, input_dim: int = 768, dropout: float = 0.4):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 512),
-            nn.BatchNorm1d(512),
+            nn.Linear(input_dim, 512),  # 768→512: 第一层降维，压缩 BERT 嵌入
+            nn.BatchNorm1d(512),  # BatchNorm 稳定训练分布，加速收敛
             nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-            nn.Linear(512, 256),
+            nn.Dropout(dropout),  # 0.4 dropout 防止过拟合
+            nn.Linear(512, 256),  # 512→256: 第二层降维
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
-            nn.Linear(256, 128),
+            nn.Linear(256, 128),  # 256→128: 第三层降维
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Dropout(dropout * 0.75),  # lighter dropout in last hidden layer
-            nn.Linear(128, 1),
+            nn.Dropout(dropout * 0.75),  # 最后一层隐层用较轻 dropout (0.3) 保留更多信号
+            nn.Linear(128, 1),  # 128→1: 输出连续评分值
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x).squeeze(-1)
+        return self.net(x).squeeze(-1)  # 去掉最后一维，返回 (batch,) 形状的评分预测
 
 
 def make_optimizer(

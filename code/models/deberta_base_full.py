@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-"""DeBERTa-v3-base LoRA on FULL 3M data. Memory-optimized for 251GB RAM."""
+"""DeBERTa-v3-base LoRA on FULL 3M data. Memory-optimized for 251GB RAM.
+
+与 deberta_lora_1m.py 的关键差异:
+  - 数据量: 3M 全量训练数据 (vs 1M 子样本)
+  - 批次配置: BS=32, GradAcc=8 → 有效 batch=256 (vs BS=16, GradAcc=16 → 256)
+  - 路径: HPC 集群绝对路径 (251GB RAM 节点)
+  - 训练策略: 同样使用 LoRA + CORAL + R-Drop + FP16
+  - 额外输出: 方差扩展 (VE) 预测 + 与 stacking_v2 混合
+"""
 
 import os, sys, time, gc
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -20,12 +28,16 @@ OUTPUT_DIR = os.path.join(ROOT, "output")
 os.makedirs(CKPT_DIR, exist_ok=True)
 
 MODEL_NAME = "microsoft/deberta-v3-base"
+# LoRA 配置: r=16, alpha=32 (2x rank), dropout=0.05; 注入 attention 的 query/value 投影
 LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.05
 LORA_TARGET = ["query_proj", "value_proj"]
+# CORAL 序数回归: 5 个评分等级 → 4 个二元阈值 (rating>1, >2, >3, >4)
 N_CLASSES, N_TASKS = 5, 4
 N_FOLDS, N_EPOCHS = 3, 3
+# 有效 batch = 32 × 8 = 256，与 1M 版本相同的有效批量
 BATCH_SIZE, GRAD_ACCUM = 32, 8
 LR, WEIGHT_DECAY, WARMUP_RATIO = 3e-5, 0.01, 0.1
+# R-Drop: 同一 batch 前向两次，MSE 惩罚两次输出的一致性; FP16 混合精度
 R_DROP_ALPHA, FP16, PATIENCE = 0.5, True, 3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -46,20 +58,24 @@ class DeBERTaLoRA(nn.Module):
         cfg = LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA, target_modules=LORA_TARGET,
                          lora_dropout=LORA_DROPOUT, bias="none")
         self.backbone = get_peft_model(base, cfg)
-        self.backbone.gradient_checkpointing_enable()
+        self.backbone.gradient_checkpointing_enable()  # 用计算换显存，适配单 GPU
         self.dropout = nn.Dropout(0.1)
+        # 分类头: 输出 N_TASKS=4 个二元 logit，供 CORAL 序数回归使用
         self.classifier = nn.Linear(base.config.hidden_size, N_TASKS)
         self.backbone.print_trainable_parameters()
 
     def forward(self, ids, mask, ttids):
         h = self.backbone(input_ids=ids, attention_mask=mask, token_type_ids=ttids).last_hidden_state
+        # 带掩码的均值池化: 用 attention_mask 排除 padding token，比 [CLS] 池化更鲁棒
         m = mask.unsqueeze(-1).float()
         p = (h * m).sum(1) / m.sum(1).clamp(min=1e-9)
         return self.classifier(self.dropout(p))
 
 
 class CORAL(nn.Module):
+    """CORAL 序数回归损失: 将 5 级评分分解为 4 个二元分类阈值。"""
     def forward(self, logits, labels):
+        # 构建二元目标: t[:,k] = 1 当且仅当 label > k+1
         t = torch.zeros(logits.size(0), N_TASKS, device=logits.device, dtype=logits.dtype)
         for k in range(N_TASKS):
             t[:, k] = (labels.long() - 1 > k).float()
@@ -67,6 +83,7 @@ class CORAL(nn.Module):
 
 
 def to_rating(logits):
+    # CORAL logits → 连续评分: 1 + Σ sigmoid(logit_k)，输出范围 (1.0, 5.0)
     return 1.0 + torch.sigmoid(logits).sum(1)
 
 
@@ -103,7 +120,7 @@ def main():
     t_tt = torch.from_numpy(td2["token_type_ids"]).to(torch.int32)
     print(f"Train: {input_ids.shape}, Test: {t_ids.shape}", flush=True)
 
-    # Resume logic
+    # 断点续训: 读取 latest.txt 确定上次完成的 fold/epoch，从中断处继续
     resume_fold = 1
     resume_epoch = 0  # 0 means start from epoch 1
     ckpt_dir = CKPT_DIR
@@ -129,6 +146,7 @@ def main():
     test_preds_list = []
     fold_rmses = []
 
+    # 3 折 KFold (shuffle=True, seed=42): 与 1M 版本使用相同的分割策略
     kf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
     for fi, (tr_idx, va_idx) in enumerate(kf.split(input_ids), 1):
         if fi < resume_fold:
@@ -185,10 +203,13 @@ def main():
                 lab = batch[3].to(DEVICE)
 
                 with autocast("cuda", enabled=FP16):
+                    # R-Drop: 同一 batch 前向两次（不同 dropout mask）
+                    # loss = (CORAL(l1) + CORAL(l2)) / 2 + α * MSE(l1, l2)
                     l1 = model(ids, mask, tt)
                     l2 = model(ids, mask, tt)
                     loss = (coral_fn(l1, lab) + coral_fn(l2, lab)) / 2 + R_DROP_ALPHA * F.mse_loss(l1, l2)
 
+                # 梯度累积: loss / GRAD_ACCUM 后反向传播，累积 GRAD_ACCUM 步再更新
                 scaler.scale(loss / GRAD_ACCUM).backward()
                 del l1, l2, ids, mask, tt, lab
 
@@ -225,7 +246,7 @@ def main():
             vrmse = float(np.sqrt(np.mean((vp - vlabs)**2)))
             print(f"  Fold {fi} Epoch {ep}: val_rmse={vrmse:.5f} ({time.time()-t0:.1f}s)", flush=True)
 
-            # Save checkpoint
+            # 保存完整训练状态 (模型/优化器/调度器/Scaler)，支持断点续训
             ckpt = {"fold": fi, "epoch": ep, "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": opt.state_dict(), "scheduler_state_dict": sched.state_dict(),
                     "scaler_state_dict": scaler.state_dict(), "best_val_rmse": best_rmse,
@@ -283,13 +304,14 @@ def main():
     pd.DataFrame({"id": test_ids, "rating": avg_test}).to_csv(
         os.path.join(OUTPUT_DIR, "submission-deberta-base-full.csv"), index=False)
 
-    # Variance expansion
+    # 方差扩展 (Variance Expansion): 拉伸预测方差以匹配训练目标分布
+    # ve = (pred - pred_mean) * (target_std / pred_std) + target_mean
     target_std = y_train.std()
     pred_std = avg_test.std()
     scale = target_std / pred_std
     ve_test = np.clip((avg_test - avg_test.mean()) * scale + y_train.mean(), 1.0, 5.0)
 
-    # Blends
+    # 混合: VE 预测 + stacking_v2 预测，扫描不同权重比
     ridge_test = np.load(os.path.join(MODEL_DIR, "stacking_v2_test.npy")).astype(np.float32)
     for w in [85, 90, 95]:
         blend = np.clip(w/100 * ve_test + (100-w)/100 * ridge_test, 1.0, 5.0)

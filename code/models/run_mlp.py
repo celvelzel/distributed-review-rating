@@ -58,10 +58,10 @@ N_FOLDS = 5
 N_EPOCHS = 50
 PATIENCE = 10
 BATCH_SIZE = 4096
-VAL_EVERY = 3  # validate every N epochs to speed up training
+VAL_EVERY = 3  # 每 3 个 epoch 验证一次，减少验证开销加速训练
 LR = 1e-3
 WEIGHT_DECAY = 1e-5
-INPUT_DIM = 768  # BERT-only (LightGCN removed — near-zero embeddings)
+INPUT_DIM = 768  # 仅使用 BERT (DeBERTa) 768 维嵌入，LightGCN 嵌入接近零已移除
 
 # ── device ─────────────────────────────────────────────────────────────
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,6 +92,7 @@ def build_features_bert_only_chunked(
     chunk_size: int = 500_000,
 ) -> np.ndarray:
     """Build BERT-only features in memory-friendly chunks."""
+    # 按 parquet row group 分块读取，避免一次性加载 3M 行嵌入到内存
     import pyarrow.parquet as pq
 
     pf = pq.ParquetFile(str(bert_path))
@@ -135,6 +136,7 @@ def train_one_fold(
     """Train one fold with early stopping and cosine LR schedule."""
     model = model.to(DEVICE)
     optimizer = make_optimizer(model, lr=LR, weight_decay=WEIGHT_DECAY)
+    # 余弦退火学习率: 从 1e-3 平滑衰减到 1e-6，避免后期学习率骤降
     scheduler = make_scheduler(optimizer, n_epochs=N_EPOCHS)
     criterion = nn.MSELoss()
 
@@ -179,7 +181,7 @@ def train_one_fold(
         # Step scheduler every epoch
         scheduler.step()
 
-        # ── validate every VAL_EVERY epochs (or first/last epoch) ──
+        # ── 每 VAL_EVERY 个 epoch 验证一次（首尾必验证），减少开销 ──
         if epoch % VAL_EVERY == 0 or epoch == 1 or epoch == N_EPOCHS:
             model.eval()
             with torch.no_grad():
@@ -196,7 +198,7 @@ def train_one_fold(
                 f"val_rmse={val_rmse:.5f}  lr={current_lr:.6f}"
             )
 
-            # ── early stopping (count validation checks, not epochs) ──
+            # ── 早停: 按验证次数计数（非 epoch 数），patience=10 次无提升则停 ──
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
@@ -222,6 +224,7 @@ def train_one_fold(
 # ── cross-validation ──────────────────────────────────────────────────
 def run_cv(X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, List[nn.Module]]:
     """5-fold CV. Returns OOF predictions and list of fold models."""
+    # 手动实现 K-Fold（非 sklearn），保证与 stacking 流程的随机种子一致
     n = len(y)
     oof = np.zeros(n, dtype=np.float32)
     models: List[nn.Module] = []
@@ -276,6 +279,7 @@ def run_cv(X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, List[nn.Module]]:
 
 def predict_test(models: List[nn.Module], X_test: np.ndarray) -> np.ndarray:
     """Average test predictions across fold models."""
+    # 5 折模型集成: 对测试集分别预测后取平均，降低单模型方差
     preds = []
     X_t = torch.from_numpy(X_test).to(DEVICE)
     for m in models:

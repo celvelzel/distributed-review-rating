@@ -33,11 +33,14 @@ def extract_tfidf_features(
     X_test  : np.ndarray  (sparse)
     vectorizer : fitted TfidfVectorizer
     """
+    # TF-IDF 配置: max_features 限制词表大小为 5000; sublinear_tf 用 1+log(tf) 替代原始词频;
+    # strip_accents 去除重音符号; 默认 ngram_range=(1,1) 即单字语法
     vectorizer = TfidfVectorizer(
         max_features=max_features,
         sublinear_tf=True,
         strip_accents="unicode",
     )
+    # 仅在训练集上 fit，再 transform 测试集，避免数据泄露
     X_train = vectorizer.fit_transform(train_texts.fillna(""))
     X_test = vectorizer.transform(test_texts.fillna(""))
     return X_train, X_test, vectorizer
@@ -96,7 +99,7 @@ def predict_and_save(
     DataFrame with columns ``id`` and ``rating``.
     """
     preds = model.predict(X_test)
-    preds = np.clip(preds, 1.0, 5.0)
+    preds = np.clip(preds, 1.0, 5.0)  # 裁剪到合法评分范围 [1, 5]
 
     submission = pd.DataFrame({"id": test_ids, "rating": preds})
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

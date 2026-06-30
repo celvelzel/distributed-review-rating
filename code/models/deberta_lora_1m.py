@@ -1,7 +1,30 @@
 #!/usr/bin/env python
-"""DeBERTa-v3-base LoRA on 1M subsample with checkpoint resume."""
+"""DeBERTa-v3-base LoRA on 1M subsample with checkpoint resume.
+
+Best single model in the COMP5434 ensemble pipeline. Achieves the strongest
+Kaggle leaderboard score (0.61734) when blended with stacking predictions.
+
+Training techniques:
+  - LoRA (Low-Rank Adaptation): Injects trainable low-rank matrices into the
+    attention query/value projections, reducing trainable params from ~140M
+    to ~1.2M while preserving DeBERTa-v3-base representation quality.
+  - CORAL (Consistent Rank Logits): Ordinal regression loss that decomposes
+    the 5-class rating into 4 binary thresholds, capturing ordinal structure.
+  - R-Drop regularisation: Forward-passes each batch twice and penalises the
+    KL divergence between the two output distributions, improving robustness.
+  - Mixed-precision (FP16) training with gradient accumulation (effective
+    batch size = 16 × 16 = 256).
+
+Cross-validation: 3-fold KFold (shuffle=True, seed=42) on a 1M-row subsample.
+Each fold trains for up to 3 epochs with early stopping (patience=3).
+
+Checkpoint resume: After every epoch, saves full training state (model,
+optimizer, scheduler, scaler) so training can resume after interruptions.
+"""
 
 import os, sys, time, gc, json
+# Disable HuggingFace tokenizers parallelism to avoid fork-safety warnings
+# when running under DataLoader with num_workers > 0.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import numpy as np
@@ -21,24 +44,61 @@ os.makedirs(CKPT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 MODEL_NAME = "microsoft/deberta-v3-base"
+
+# LoRA configuration: rank=16 balances expressiveness and parameter savings.
+# alpha=32 (= 2× rank) is the standard scaling factor. dropout=0.05 for
+# lightweight regularisation on the adapter weights.
+# Target modules: query_proj and value_proj in the attention layer — the
+# two projections where LoRA is most effective per the original paper.
 LORA_R, LORA_ALPHA, LORA_DROPOUT = 16, 32, 0.05
 LORA_TARGET = ["query_proj", "value_proj"]
+
+# N_TASKS = N_CLASSES - 1: CORAL reduces 5 ordinal classes to 4 binary
+# thresholds (rating > 1, > 2, > 3, > 4).
 N_CLASSES, N_TASKS = 5, 4
+
+# Cross-validation and training schedule
 N_FOLDS, N_EPOCHS = 3, 3
+
+# Effective batch size = BATCH_SIZE × GRAD_ACCUM = 16 × 16 = 256.
+# Large effective batch stabilises training on the 1M subsample.
 BATCH_SIZE, GRAD_ACCUM = 16, 16
+
+# AdamW with cosine schedule and 10% warmup steps to avoid early instability.
 LR, WEIGHT_DECAY, WARMUP_RATIO = 3e-5, 0.01, 0.1
+
+# R_DROP_ALPHA controls the MSE penalty between two forward passes (R-Drop).
+# FP16 enables mixed-precision for memory savings and speed.
+# PATIENCE=3: early-stop if val RMSE does not improve for 3 consecutive epochs.
 R_DROP_ALPHA, FP16, PATIENCE = 0.5, True, 3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class DS(Dataset):
+    """Generic tensor dataset supporting optional index-based subsetting.
+
+    Used to create train/val splits from the same underlying tensors without
+    copying data — passing idx=tr_idx or idx=va_idx selects fold rows in-place.
+    """
     def __init__(self, *tensors, idx=None):
+        # If idx is provided, each tensor is sliced to those indices (for KFold splits).
         self.t = [t[idx] if idx is not None else t for t in tensors]
     def __len__(self): return len(self.t[0])
     def __getitem__(self, i): return tuple(t[i] for t in self.t)
 
 
 class DeBERTaLoRA(nn.Module):
+    """DeBERTa-v3-base with LoRA adapters and a CORAL ordinal-regression head.
+
+    Architecture:
+      1. Backbone: DeBERTa-v3-base with LoRA adapters on attention projections.
+         gradient_checkpointing_enable() trades compute for memory, allowing
+         training on a single GPU with 1M samples.
+      2. Pooling: Mean-pooling over the last hidden states, masked by the
+         attention mask to exclude padding tokens.
+      3. Classifier: Linear(hidden_size, 4) producing 4 binary logits for CORAL.
+    """
+
     def __init__(self):
         super().__init__()
         from transformers import AutoModel
@@ -46,30 +106,67 @@ class DeBERTaLoRA(nn.Module):
         base = AutoModel.from_pretrained(MODEL_NAME)
         cfg = LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA, target_modules=LORA_TARGET, lora_dropout=LORA_DROPOUT, bias="none")
         self.backbone = get_peft_model(base, cfg)
+        # Gradient checkpointing reduces peak GPU memory at the cost of ~20%
+        # slower training, enabling the model to fit within single-GPU limits.
         self.backbone.gradient_checkpointing_enable()
         self.dropout = nn.Dropout(0.1)
+        # Single linear layer maps pooled representation to N_TASKS=4 logits.
+        # These logits are used by CORAL for ordinal regression.
         self.classifier = nn.Linear(base.config.hidden_size, N_TASKS)
 
     def forward(self, ids, mask, ttids):
+        """Forward pass: returns 4 binary logits for CORAL.
+
+        Args:
+            ids: input_ids (batch, seq_len)
+            mask: attention_mask (batch, seq_len)
+            ttids: token_type_ids (batch, seq_len)
+        Returns:
+            logits: (batch, 4) — one binary logit per CORAL threshold.
+        """
         h = self.backbone(input_ids=ids, attention_mask=mask, token_type_ids=ttids).last_hidden_state
+        # Mean pooling: average over sequence dimension, excluding padding
+        # tokens via the attention mask. This is more robust than [CLS] pooling
+        # for DeBERTa which does not use a standard [CLS] token.
         m = mask.unsqueeze(-1).float()
         p = (h * m).sum(1) / m.sum(1).clamp(min=1e-9)
         return self.classifier(self.dropout(p))
 
 
 class CORAL(nn.Module):
+    """CORAL (Consistent Rank Logits) loss for ordinal regression.
+
+    Decomposes a 5-class ordinal label into 4 binary classification tasks:
+      threshold k asks "is the rating strictly greater than k+1?"
+    For example, rating=4 → thresholds [1,1,1,0] (greater than 1, 2, 3 but not 4).
+    This preserves the ordinal structure of ratings (1 < 2 < 3 < 4 < 5)
+    better than standard multi-class cross-entropy.
+    """
+
     def forward(self, logits, labels):
+        """Compute binary cross-entropy loss on the ordinal thresholds.
+
+        Args:
+            logits: (batch, 4) — predicted binary logits per threshold.
+            labels: (batch,) — integer ratings 1–5.
+        """
+        # Build binary targets: t[:, k] = 1 if label > k+1, else 0.
         t = torch.zeros(logits.size(0), N_TASKS, device=logits.device, dtype=logits.dtype)
         for k in range(N_TASKS):
             t[:, k] = (labels.long() - 1 > k).float()
         return F.binary_cross_entropy_with_logits(logits, t, reduction="mean")
 
 
-def to_rating(logits):
-    return 1.0 + torch.sigmoid(logits).sum(1)
-
-
 def predict(model, ds, bs=64):
+    """Generate predictions for a dataset in eval mode.
+
+    Args:
+        model: trained DeBERTaLoRA model.
+        ds: DS dataset wrapping (input_ids, attention_mask, token_type_ids).
+        bs: batch size for inference.
+    Returns:
+        np.ndarray of predicted ratings in [1, 5].
+    """
     model.eval()
     preds = []
     dl = DataLoader(ds, batch_size=bs, shuffle=False, num_workers=0)
@@ -101,7 +198,9 @@ def main():
     t_tt = torch.from_numpy(td2["token_type_ids"]).to(torch.int32)
     print(f"Train: {input_ids.shape}, Test: {t_ids.shape}", flush=True)
 
-    # Load checkpoint
+    # Load checkpoint for resume: latest.txt stores the filename of the most
+    # recently saved checkpoint. If it exists, training resumes from that
+    # fold/epoch, skipping already-completed folds entirely.
     resume = None
     latest = os.path.join(CKPT_DIR, "latest.txt")
     if os.path.exists(latest):
@@ -115,9 +214,11 @@ def main():
     test_preds_list = []
     fold_rmses = []
 
+    # 3 折 KFold (shuffle=True, seed=42): 打乱后均分，保证可复现
     kf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
     folds = list(kf.split(input_ids))
 
+    # 断点续训: 从上次保存的 fold/epoch 继续，跳过已完成的 fold
     start_fold = resume["fold"] if resume else 1
     start_epoch = (resume["epoch"] + 1) if resume else 1
 
@@ -171,10 +272,18 @@ def main():
                 lab = batch[3].to(DEVICE)
 
                 with autocast("cuda", enabled=FP16):
+                    # R-Drop: forward-pass the same batch twice (different
+                    # dropout masks) and compute:
+                    #   loss = (CORAL(l1) + CORAL(l2)) / 2 + α * MSE(l1, l2)
+                    # The MSE term regularises the two outputs to be consistent,
+                    # effectively constraining the model to be robust to dropout.
                     l1 = model(ids, mask, tt)
                     l2 = model(ids, mask, tt)
                     loss = (coral_fn(l1, lab) + coral_fn(l2, lab)) / 2 + R_DROP_ALPHA * F.mse_loss(l1, l2)
 
+                # Scale loss by 1/GRAD_ACCUM for gradient accumulation:
+                # gradients are accumulated over GRAD_ACCUM mini-batches before
+                # the optimizer steps, simulating a larger effective batch size.
                 scaler.scale(loss / GRAD_ACCUM).backward()
                 del l1, l2, ids, mask, tt, lab
 
@@ -266,6 +375,9 @@ def main():
     np.save(os.path.join(MODEL_DIR, "deberta_v3base_1m_oof.npy"), oof)
     np.save(os.path.join(MODEL_DIR, "deberta_v3base_1m_test.npy"), avg_test)
 
+    # 混合 DeBERTa 1M 预测与 stacking_v2 Ridge 预测
+    # 混合公式: final = w * deberta + (1-w) * stacking_v2
+    # 扫描 w 从 70% 到 100% (步长 5%)，DeBERTa 权重越高通常 Kaggle 成绩越好
     import pandas as pd
     ridge_test = np.load(os.path.join(MODEL_DIR, "stacking_v2_test.npy")).astype(np.float32)
 

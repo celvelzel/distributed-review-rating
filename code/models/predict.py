@@ -29,12 +29,12 @@ OUTPUT_CSV = ROOT / "output" / "submission-final.csv"
 @timed("predict", "generate_submission")
 def generate_submission() -> None:
     """Load predictions, clip, join IDs, write CSV."""
-    # --- Load stacking predictions ---
+    # --- 加载 stacking 元学习器预测 ---
     preds = np.load(STACKING_NPY)
     print(f"Loaded stacking predictions: shape={preds.shape}, "
           f"min={preds.min():.4f}, max={preds.max():.4f}")
 
-    # --- Clip to [1, 5] (safety; already clipped upstream) ---
+    # --- 裁剪到 [1, 5] 评分范围（安全措施，上游已裁剪）---
     preds = np.clip(preds, 1.0, 5.0)
     print(f"After clip: min={preds.min():.4f}, max={preds.max():.4f}")
 
@@ -43,11 +43,12 @@ def generate_submission() -> None:
     ids = test_table["id"].to_pylist()
     print(f"Loaded test IDs: {len(ids)} rows")
 
+    # 断言 ID 数量与预测数量一致，防止错位
     assert len(ids) == len(preds), (
         f"ID/prediction length mismatch: {len(ids)} vs {len(preds)}"
     )
 
-    # --- Write submission CSV ---
+    # --- 写出提交 CSV: id,rating 格式，评分保留 6 位小数 ---
     OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

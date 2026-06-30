@@ -69,13 +69,16 @@ BASE_MODELS = {
 
 class Logger:
     """Dual writer: stdout + file."""
+
     def __init__(self, filepath):
         self.file = open(filepath, "w", encoding="utf-8")
+
     def print(self, *args, **kwargs):
         msg = " ".join(str(a) for a in args)
         print(msg, **kwargs)
         self.file.write(msg + "\n")
         self.file.flush()
+
     def close(self):
         self.file.close()
 

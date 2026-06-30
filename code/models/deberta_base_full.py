@@ -43,9 +43,12 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class DS(Dataset):
+
     def __init__(self, *tensors, idx=None):
         self.t = [t[idx] if idx is not None else t for t in tensors]
+
     def __len__(self): return len(self.t[0])
+
     def __getitem__(self, i): return tuple(t[i] for t in self.t)
 
 
@@ -74,6 +77,7 @@ class DeBERTaLoRA(nn.Module):
 
 class CORAL(nn.Module):
     """CORAL 序数回归损失: 将 5 级评分分解为 4 个二元分类阈值。"""
+
     def forward(self, logits, labels):
         # 构建二元目标: t[:,k] = 1 当且仅当 label > k+1
         t = torch.zeros(logits.size(0), N_TASKS, device=logits.device, dtype=logits.dtype)
@@ -105,7 +109,7 @@ def main():
     print("DeBERTa-v3-base LoRA on FULL 3M data", flush=True)
     print("=" * 60, flush=True)
 
-    # Load tokens
+    # --- Load data ---
     print("Loading tokens...", flush=True)
     td = np.load(os.path.join(MODEL_DIR, "train_tokens.npz"), allow_pickle=True)
     input_ids = torch.from_numpy(td["input_ids"]).to(torch.int32)
@@ -141,7 +145,7 @@ def main():
                 resume_epoch = done_epoch
                 print(f"Fold {done_fold} epoch {done_epoch}/{N_EPOCHS} done -> resume fold {resume_fold} from epoch {resume_epoch + 1}", flush=True)
 
-    # Train
+    # --- Cross-validation ---
     oof = np.zeros(len(y_train), dtype=np.float32)
     test_preds_list = []
     fold_rmses = []
@@ -190,6 +194,7 @@ def main():
         best_state = None
         patience = 0
 
+        # --- Training loop ---
         for ep in range(start_epoch, N_EPOCHS + 1):
             model.train()
             opt.zero_grad(set_to_none=True)
@@ -230,7 +235,7 @@ def main():
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 scaler.step(opt); scaler.update(); opt.zero_grad(set_to_none=True); sched.step()
 
-            # Validate
+            # --- Validation ---
             model.eval()
             vp, vlabs = [], []
             with torch.no_grad():
@@ -246,6 +251,7 @@ def main():
             vrmse = float(np.sqrt(np.mean((vp - vlabs)**2)))
             print(f"  Fold {fi} Epoch {ep}: val_rmse={vrmse:.5f} ({time.time()-t0:.1f}s)", flush=True)
 
+            # --- Save checkpoint ---
             # 保存完整训练状态 (模型/优化器/调度器/Scaler)，支持断点续训
             ckpt = {"fold": fi, "epoch": ep, "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": opt.state_dict(), "scheduler_state_dict": sched.state_dict(),
@@ -267,7 +273,7 @@ def main():
                     print(f"  Early stopping", flush=True)
                     break
 
-        # OOF with best model
+        # --- OOF predictions ---
         model.load_state_dict(best_state)
         model = model.to(DEVICE)
         model.eval()
@@ -284,10 +290,11 @@ def main():
         fold_rmses.append(frmse)
         print(f"  Fold {fi} OOF RMSE: {frmse:.5f}", flush=True)
 
+        # --- Test predictions ---
         test_preds_list.append(np.clip(predict(model, test_ds), 1.0, 5.0))
         del model, best_state; gc.collect(); torch.cuda.empty_cache()
 
-    # Results
+    # --- Results ---
     avg_test = np.clip(np.mean(test_preds_list, axis=0), 1.0, 5.0)
     oof_rmse = np.sqrt(np.mean((oof - y_train)**2))
     print(f"\n{'='*60}", flush=True)
@@ -296,7 +303,7 @@ def main():
     print(f"Test: mean={avg_test.mean():.4f}, std={avg_test.std():.4f}", flush=True)
     print(f"Time: {(time.time()-t_start)/3600:.1f}h", flush=True)
 
-    # Save
+    # --- Save predictions ---
     np.save(os.path.join(MODEL_DIR, "deberta_base_full_oof.npy"), oof)
     np.save(os.path.join(MODEL_DIR, "deberta_base_full_test.npy"), avg_test)
 
@@ -304,6 +311,7 @@ def main():
     pd.DataFrame({"id": test_ids, "rating": avg_test}).to_csv(
         os.path.join(OUTPUT_DIR, "submission-deberta-base-full.csv"), index=False)
 
+    # --- Variance expansion & blends ---
     # 方差扩展 (Variance Expansion): 拉伸预测方差以匹配训练目标分布
     # ve = (pred - pred_mean) * (target_std / pred_std) + target_mean
     target_std = y_train.std()

@@ -42,7 +42,9 @@ NOTEPAD_PATH.parent.mkdir(parents=True, exist_ok=True)
 warnings.filterwarnings("ignore")
 sns.set_theme(style="whitegrid", font_scale=1.1)
 
+
 # ─── Helper: save figure ─────────────────────────────────────────────────────
+
 def savefig(name: str):
     path = FIG_DIR / name
     plt.savefig(path, dpi=150, bbox_inches="tight")
@@ -106,6 +108,7 @@ prod_df.printSchema()
 # 2. MISSING RATE PER COLUMN
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n[3/7] Missing rate per column ...")
+
 
 def missing_rate_sdf(df, name):
     """Compute missing (null + empty string) rate for each column."""

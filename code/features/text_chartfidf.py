@@ -187,6 +187,7 @@ def load(out_dir: str | Path = ARTIFACT_DIR):
 # ---------------------------------------------------------------------------
 # CLI entry-point
 # ---------------------------------------------------------------------------
+
 def main():
     """Run char-level TF-IDF extraction from raw CSVs."""
     print("=" * 60)

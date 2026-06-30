@@ -80,10 +80,13 @@ class DS(Dataset):
     Used to create train/val splits from the same underlying tensors without
     copying data — passing idx=tr_idx or idx=va_idx selects fold rows in-place.
     """
+
     def __init__(self, *tensors, idx=None):
         # If idx is provided, each tensor is sliced to those indices (for KFold splits).
         self.t = [t[idx] if idx is not None else t for t in tensors]
+
     def __len__(self): return len(self.t[0])
+
     def __getitem__(self, i): return tuple(t[i] for t in self.t)
 
 
@@ -183,7 +186,7 @@ def main():
     print("DeBERTa-v3-base LoRA on 1M subsample", flush=True)
     print("=" * 60, flush=True)
 
-    # Load data
+    # --- Load data ---
     print("Loading data...", flush=True)
     td = np.load(os.path.join(MODEL_DIR, "train_tokens_1m.npz"), allow_pickle=True)
     input_ids = torch.from_numpy(td["input_ids"]).to(torch.int32)
@@ -210,6 +213,7 @@ def main():
             resume = torch.load(path, map_location="cpu", weights_only=False)
             print(f"Resuming from: {name} (fold={resume['fold']}, epoch={resume['epoch']})", flush=True)
 
+    # --- Initialize predictions ---
     oof = np.zeros(len(y_train), dtype=np.float32)
     test_preds_list = []
     fold_rmses = []
@@ -222,6 +226,7 @@ def main():
     start_fold = resume["fold"] if resume else 1
     start_epoch = (resume["epoch"] + 1) if resume else 1
 
+    # --- Cross-validation fold loop ---
     for fi, (tr_idx, va_idx) in enumerate(folds, 1):
         if fi < start_fold:
             print(f"Skipping fold {fi} (completed)", flush=True)
@@ -259,6 +264,7 @@ def main():
             best_rmse = resume.get("best_val_rmse", float("inf"))
             resume = None
 
+        # --- Training loop ---
         for ep in range(ep_start, N_EPOCHS + 1):
             model.train()
             opt.zero_grad(set_to_none=True)
@@ -304,7 +310,7 @@ def main():
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 scaler.step(opt); scaler.update(); opt.zero_grad(set_to_none=True); sched.step()
 
-            # Validate
+            # --- Validation ---
             model.eval()
             vp, vlabs = [], []
             with torch.no_grad():
@@ -320,7 +326,7 @@ def main():
             vrmse = float(np.sqrt(np.mean((vp - vlabs)**2)))
             print(f"  Fold {fi} Epoch {ep}: val_rmse={vrmse:.5f} ({time.time()-t0:.1f}s)", flush=True)
 
-            # Save checkpoint
+            # --- Save checkpoint ---
             ckpt = {"fold": fi, "epoch": ep, "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": opt.state_dict(), "scheduler_state_dict": sched.state_dict(),
                     "scaler_state_dict": scaler.state_dict(), "best_val_rmse": best_rmse, "patience_counter": patience,
@@ -340,7 +346,7 @@ def main():
                     print(f"  Early stopping", flush=True)
                     break
 
-        # OOF with best model
+        # --- OOF predictions ---
         model.load_state_dict(best_state)
         model = model.to(DEVICE)
         model.eval()
@@ -357,13 +363,13 @@ def main():
         fold_rmses.append(frmse)
         print(f"  Fold {fi} OOF RMSE: {frmse:.5f}", flush=True)
 
-        # Test predictions
+        # --- Test predictions ---
         test_preds_list.append(np.clip(predict(model, test_ds), 1.0, 5.0))
 
         del model, best_state, train_ds, val_ds, tl, vl
         gc.collect(); torch.cuda.empty_cache()
 
-    # Results
+    # --- Results ---
     avg_test = np.clip(np.mean(test_preds_list, axis=0), 1.0, 5.0)
     oof_rmse = np.sqrt(np.mean((oof - y_train)**2))
 
@@ -372,9 +378,11 @@ def main():
     print(f"OOF RMSE: {oof_rmse:.5f}", flush=True)
     print(f"Test: mean={avg_test.mean():.4f}, std={avg_test.std():.4f}", flush=True)
 
+    # --- Save predictions ---
     np.save(os.path.join(MODEL_DIR, "deberta_v3base_1m_oof.npy"), oof)
     np.save(os.path.join(MODEL_DIR, "deberta_v3base_1m_test.npy"), avg_test)
 
+    # --- Blend with stacking ---
     # 混合 DeBERTa 1M 预测与 stacking_v2 Ridge 预测
     # 混合公式: final = w * deberta + (1-w) * stacking_v2
     # 扫描 w 从 70% 到 100% (步长 5%)，DeBERTa 权重越高通常 Kaggle 成绩越好

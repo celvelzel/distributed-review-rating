@@ -200,6 +200,7 @@ def to_scipy_sparse(df, max_features, desc=""):
 
     # Convert vectors to compact Python tuples on the JVM side, bypassing
     # the verbose Jackson JSON serializer for SparseVector.
+
     def _extract(vec):
         if vec is None:
             return ([], [])
